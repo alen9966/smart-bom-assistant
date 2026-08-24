@@ -706,17 +706,17 @@
   function withPrintedBoard(rows, options) {
     const vendor = text(options && options.pcbVendor);
     const revision = text(options && options.pcbRevision);
+    if (!revision || !vendor) return rows || [];
     const next = (rows || []).map((row) => {
       if (!isPrintedBoard(row)) return row;
       return {
         ...row,
         category: "印制板",
-        vendor: vendor || row.vendor,
+        vendor,
         model: text(row.model) || revision || row.model,
         description: text(row.description) || revision || row.description
       };
     });
-    if (!revision) return next;
     const already = next.some((row) => isPrintedBoard(row) && [row.model, row.description, row.drawingNo, row.partNumber].some((value) => text(value) === revision));
     if (already) return next;
     return [...next, makePrintedBoardRow(options || {})];

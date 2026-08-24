@@ -48,7 +48,7 @@ const pcbOutputs = Core.buildOutputs(extracted.rows, {
   pcbVendor: "嘉立创"
 });
 const pcbRow = pcbOutputs.procurement.find((row) => row.category === "印制板" || row.model === "ZC7.820.0155-V3");
-assert.ok(pcbRow, "填写 PCB 版号后采购清单应追加印制板");
+assert.ok(pcbRow, "PCB版号和板厂都填写后采购清单应追加印制板");
 assert.equal(pcbRow.model, "ZC7.820.0155-V3", "印制板名称应为版号");
 assert.equal(pcbRow.description, "ZC7.820.0155-V3", "印制板名称应为版号");
 assert.equal(pcbRow.vendor, "嘉立创", "印制板生产厂家应使用页面 PCB 板厂");
@@ -56,6 +56,15 @@ assert.equal(pcbRow.baseQuantity, 1, "印制板单机数量默认为 1");
 assert.equal(pcbRow.quantity, 4, "印制板采购数量应等于生产数量");
 assert.equal(pcbOutputs.picking.some((row) => row.category === "印制板"), false, "印制板只进入采购清单，不进入领料单");
 assert.equal(pcbOutputs.procurement.filter((row) => row.model === "ZC7.820.0155-V3").length, 1, "同一版号不得重复追加印制板");
+
+const pcbOnlyRevision = Core.buildOutputs(extracted.rows, {
+  skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbRevision: "ZC7.820.0155-V3", pcbVendor: ""
+});
+assert.equal(pcbOnlyRevision.procurement.some((row) => row.category === "印制板" || row.model === "ZC7.820.0155-V3"), false, "只填 PCB版号时不应出现印制板分类");
+const pcbOnlyVendor = Core.buildOutputs(extracted.rows, {
+  skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbRevision: "", pcbVendor: "嘉立创"
+});
+assert.equal(pcbOnlyVendor.procurement.some((row) => row.category === "印制板"), false, "只填 PCB板厂时不应出现印制板分类");
 
 const assemblyExtracted = Core.extractRows(sheet, mapping, 1);
 const mechanicalRow = { ...assemblyExtracted.rows[0], partNumber: "M-001", designator: "M1", description: "安装螺钉", model: "M3", quantityRaw: "3", baseQuantity: 3, quantity: 3, errors: [], warnings: [], status: "ok" };
