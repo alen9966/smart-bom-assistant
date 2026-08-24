@@ -1,0 +1,17 @@
+node_modules/
+release/
+*.zip
+tests/tmp/
+.qa-*
+.artifact-*
+.inspect-*
+.verify-*
+历史网页版_不要发/
+历史EXE_不要发/
+智料单_v*/
+dist/
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+~$*.xlsx

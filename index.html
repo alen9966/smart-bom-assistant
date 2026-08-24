@@ -1,0 +1,407 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="离线智能识别 BOM 表头，校验数据并生成装配清单、领料单、采购清单、明细表和外购件汇总表。">
+  <title>智料单 · BOM 工作台</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#" aria-label="智料单首页">
+        <span class="brand-mark">料</span>
+        <span><strong>智料单</strong><small>BOM 工作台</small></span>
+      </a>
+      <div class="topbar-actions">
+        <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
+        <button class="version-button" id="openChangelog" type="button">v1.30 网页版 · 更新日志</button>
+        <button class="ghost-button" id="openHelp" type="button">使用说明</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-copy">
+          <span class="eyebrow">SMART BOM WORKSPACE</span>
+          <h1>格式不标准，也能读懂。</h1>
+          <p>自动寻找表头、匹配字段并指出具体问题；确认无误后，一次生成生产需要的全部清单。</p>
+        </div>
+        <ol class="progress-steps" aria-label="处理进度">
+          <li class="active" data-step="1"><span>1</span><div><strong>导入文件</strong><small>智能识别</small></div></li>
+          <li data-step="2"><span>2</span><div><strong>检查校对</strong><small>映射与数据</small></div></li>
+          <li data-step="3"><span>3</span><div><strong>生成清单</strong><small>按需导出</small></div></li>
+        </ol>
+      </section>
+
+      <section class="mode-switch" aria-label="导入类型">
+        <button class="mode-card active" data-mode="bom" type="button">
+          <span class="mode-icon">B</span>
+          <span><strong>导入 AD / BOM</strong><small>生成装配、领料、采购、明细与外购汇总</small></span>
+          <span class="check">✓</span>
+        </button>
+        <button class="mode-card" data-mode="assembly" type="button">
+          <span class="mode-icon alternate">装</span>
+          <span><strong>导入装配清单</strong><small>常规清单保持原数量；阻容外协备料按生产数量计算</small></span>
+          <span class="check">✓</span>
+        </button>
+      </section>
+
+      <section class="workspace-grid">
+        <div class="main-column">
+          <article class="panel upload-panel" id="uploadPanel">
+            <div class="panel-heading">
+              <div><span class="section-number">01</span><div><h2>导入料单</h2><p>无需整理成固定模板，程序会自动查找真实表头。</p></div></div>
+              <button class="text-button hidden" id="replaceFile" type="button">继续添加 BOM</button>
+            </div>
+
+            <label class="drop-zone" id="dropZone" for="fileInput">
+              <input id="fileInput" type="file" accept=".xlsx,.xls,.xlsm,.csv" multiple hidden>
+              <span class="upload-symbol">↥</span>
+              <strong>拖入一个或多个 Excel 文件，或点击选择</strong>
+              <span>支持 .xlsx / .xls / .xlsm / .csv，最多读取前 50,000 行</span>
+              <em>选择文件</em>
+            </label>
+
+            <div class="file-summary hidden" id="fileSummary">
+              <div class="file-icon">X</div>
+              <div class="file-name-wrap"><strong id="fileName">—</strong><span id="fileMeta">—</span></div>
+              <div class="recognition-stats">
+                <div><span id="sheetCount">0</span><small>工作表</small></div>
+                <div><span id="headerRow">—</span><small>识别表头</small></div>
+                <div><span id="matchedCount">0</span><small>匹配字段</small></div>
+                <div><span id="recognitionScore">0%</span><small>识别置信度</small></div>
+              </div>
+              <button class="icon-button" id="clearFile" type="button" aria-label="移除文件">×</button>
+            </div>
+
+            <div class="bom-file-list hidden" id="bomFileList"></div>
+
+            <div class="notice hidden" id="recognitionNotice" role="status"></div>
+          </article>
+
+          <article class="panel hidden" id="mappingPanel">
+            <div class="panel-heading">
+              <div><span class="section-number">02</span><div><h2>确认字段对应关系</h2><p>先看表头检查：已找到为绿色，缺少为红色；下方任何对应关系都可以修改。</p></div></div>
+              <div class="inline-controls">
+                <div class="inline-control"><label for="sheetSelect">数据工作表</label><select id="sheetSelect"></select></div>
+                <div class="inline-control"><label for="manualHeaderRow">表头行</label><input id="manualHeaderRow" type="number" min="1" max="200" value="1" title="自动识别不准确时可手动指定"></div>
+                <div class="inline-control"><label for="encodingSelect">读取编码</label><select id="encodingSelect">
+                  <option value="auto">自动识别</option>
+                  <option value="utf8">UTF-8 / 标准 XLSX</option>
+                  <option value="gb18030">简体中文 GBK / GB18030</option>
+                  <option value="big5">繁体中文 Big5</option>
+                  <option value="western">西文 Windows-1252</option>
+                </select></div>
+                <button class="secondary-button" id="reloadEncoding" type="button">按此编码重读</button>
+              </div>
+            </div>
+            <section class="header-check" aria-labelledby="headerCheckTitle">
+              <div class="header-check-heading"><div><strong id="headerCheckTitle">模板列对照</strong><small>列出已勾选清单的全部模板列，并说明原表来源、推导或缺失情况</small></div><span id="headerCheckSummary">—</span></div>
+              <div class="header-check-grid" id="headerCheckGrid"></div>
+            </section>
+            <div class="mapping-grid" id="mappingGrid"></div>
+            <div class="mapping-footer">
+              <span id="mappingHint">至少需要“数量”和一个物料标识字段。</span>
+              <button class="secondary-button" id="resetMapping" type="button">恢复智能匹配</button>
+            </div>
+          </article>
+
+          <article class="panel hidden" id="previewPanel">
+            <div class="panel-heading preview-heading">
+              <div><span class="section-number">03</span><div><h2>数据预览与问题定位</h2><p id="previewDescription">检查识别结果；黄色提示建议确认，红色问题会阻止该行参与汇总。</p></div></div>
+              <div class="preview-actions">
+                <button class="filter-chip active" data-filter="all" type="button">全部 <span id="allCount">0</span></button>
+                <button class="filter-chip warning" data-filter="warning" type="button">提醒 <span id="warningCount">0</span></button>
+                <button class="filter-chip error" data-filter="error" type="button">错误 <span id="errorCount">0</span></button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead id="previewHead"></thead>
+                <tbody id="previewBody"></tbody>
+              </table>
+            </div>
+            <div class="table-footer">
+              <span id="rowLimitNote"></span>
+              <span>可直接修改预览中的内容，修改后会立即重新校验。</span>
+            </div>
+          </article>
+        </div>
+
+        <aside class="side-column">
+          <article class="panel sticky-card project-panel">
+            <div class="side-title"><span>项</span><div><h2>项目信息</h2><p>会写入每张导出清单</p></div></div>
+            <div class="form-grid">
+              <label><span>项目工号</span><input id="projectCode" autocomplete="off" placeholder="例如 ZCJY260704"></label>
+              <label><span>产品型号</span><input id="productModel" autocomplete="off" placeholder="例如 共视接收机"></label>
+              <label class="wide"><span>项目名称</span><input id="projectName" autocomplete="off" placeholder="例如 整机采购"></label>
+              <label><span>批次</span><input id="batch" autocomplete="off" placeholder="例如 2601"></label>
+              <label><span>生产数量</span><input id="multiplier" type="number" min="0.0001" step="any" value="1"></label>
+              <label class="wide"><span>装配变量（如原始 BOM 没有此列，可在此手动填写；未填写时按“整机采购”处理）</span><input id="variant" autocomplete="off" placeholder="例如 整机采购 / 控制板A / 主控板B"></label>
+              <label class="wide"><span>使用部门</span><input id="department" autocomplete="off" placeholder="例如 设备与系统"></label>
+              <label><span>PCB版号</span><input id="pcbRevision" autocomplete="off" placeholder="例如 ZC7.820.0155-V3"></label>
+              <label><span>PCB板厂</span><input id="pcbVendor" autocomplete="off" placeholder="例如 嘉立创"></label>
+            </div>
+
+            <div class="divider"></div>
+            <div class="export-mode-block">
+              <div class="export-title"><div><strong>批量生成方式</strong><small>多个 BOM 可分别生成或合并汇总，均直接下载 Excel</small></div></div>
+              <div class="export-mode-options">
+                <label class="export-mode-option active"><input type="radio" name="exportMode" value="separate" checked><span><strong>每个 BOM 分别生成</strong><small>勾选几类清单就直接下载几个 Excel，不再打包</small></span></label>
+                <label class="export-mode-option"><input type="radio" name="exportMode" value="combined"><span><strong>所有 BOM 合并汇总</strong><small>跨 BOM 汇总数量，每类清单分别下载一个 Excel</small></span></label>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="output-path-block" id="outputPathBlock">
+              <div class="export-title"><div><strong>文件保存位置</strong><small id="outputPathHint">浏览器版使用系统下载目录</small></div></div>
+              <div class="output-path-row">
+                <input id="outputPath" type="text" readonly value="系统下载目录" aria-label="文件保存位置">
+                <button class="ghost-button" id="chooseOutputPath" type="button">更改</button>
+              </div>
+            </div>
+            <div class="divider"></div>
+            <div class="export-title"><div><strong>需要生成</strong><small id="modeExportHint">BOM 模式可生成 6 类清单</small></div><button class="text-button" id="toggleAllOutputs" type="button">全选</button></div>
+            <div class="output-list" id="outputList"></div>
+            <div class="template-note">公司默认模板会原样保留字体、字号、边框与打印设置；多类清单会分别直接下载 Excel，不再生成 ZIP。浏览器首次询问是否允许下载多个文件时请选择允许。</div>
+
+            <details class="advanced-settings">
+              <summary>汇总与外购判断设置</summary>
+              <label><span>外购判断方式</span>
+                <select id="purchaseMode">
+                  <option value="auto">自动判断（推荐）</option>
+                  <option value="strict">仅识别明确的外购关键词</option>
+                  <option value="all">全部视为外购件</option>
+                </select>
+              </label>
+              <label class="checkbox-line"><input id="skipInvalid" type="checkbox" checked><span>汇总时跳过有红色错误的行</span></label>
+            </details>
+
+            <button class="primary-button" id="generateButton" type="button" disabled>
+              <span>生成 Excel 清单</span><span>→</span>
+            </button>
+            <p class="generation-note" id="generationNote">请先导入一份料单</p>
+          </article>
+        </aside>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="helpDialog">
+    <div class="dialog-card">
+      <div class="dialog-heading"><div><span class="eyebrow">QUICK GUIDE</span><h2>三步完成一份料单</h2></div><button id="closeHelp" type="button" aria-label="关闭">×</button></div>
+      <ol class="help-steps">
+        <li><span>1</span><div><strong>直接导入一个或多个原文件</strong><p>无需删标题、改列名或调整列顺序。程序会逐个扫描工作表；可在文件条中切换校对每个 BOM。</p></div></li>
+        <li><span>2</span><div><strong>确认黄色项目</strong><p>字段映射和异常行都有明确原因。出现乱码时，在“读取编码”中选择 GBK / GB18030 后重读；映射不准确时可用下拉框改正。</p></div></li>
+        <li><span>3</span><div><strong>选择批量方式、模板并生成</strong><p>装配、领料、采购、外协阻容四类常用清单默认勾选，并可分别指定模板；其他报表可展开选择。外协阻容备料会单独乘生产数量。</p></div></li>
+      </ol>
+      <div class="dialog-note"><strong>隐私说明</strong><p>文件读取、计算和导出均在当前浏览器内完成，不会上传至服务器。</p></div>
+    </div>
+  </dialog>
+
+  <dialog id="changelogDialog">
+    <div class="dialog-card changelog-card">
+      <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
+      <section class="release latest-release">
+        <div class="release-heading"><strong>v1.30 网页版</strong><time>2026-08-24</time></div>
+        <ul>
+          <li>采购清单自动追加「印制板」分类：名称用页面「PCB版号」，生产厂家用页面「PCB板厂」。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.29 网页版</strong><time>2026-08-24</time></div>
+        <ul>
+          <li>修复「名称」「型号」等无分隔符的长文本换行后被裁切的问题：按列宽硬换行、更保守加高行高；装配清单「名称」同步左对齐。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.28 网页版</strong><time>2026-08-20</time></div>
+        <ul>
+          <li>修复生成表格打印出现大量空白页的问题：未使用的模板空行自动隐藏，打印区域收束到实际数据（有表尾的清单保留表尾）。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.27 网页版</strong><time>2026-08-20</time></div>
+        <ul>
+          <li>装配清单进一步收窄「位号」列、加宽「备注」列，并启用 A4「适合页宽」打印，避免备注打印时消失。</li>
+          <li>采购 / 外协阻容再次压缩「名称、型号」等列，给备注列更多宽度。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.26 网页版</strong><time>2026-08-20</time></div>
+        <ul>
+          <li>修复采购清单（及外协阻容备料清单）打印超出 A4 导致「备注」列被裁切消失的问题：收窄「名称、型号」等列宽、补全备注列宽度，并启用按页宽适应横向打印。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.25 网页版</strong><time>2026-08-20</time></div>
+        <ul>
+          <li>装配清单「型号」「位号」改为左对齐；采购清单与外协阻容备料清单的「名称、型号」同步左对齐。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.24 网页版</strong><time>2026-08-20</time></div>
+        <ul>
+          <li>修复装配清单、采购清单、外协阻容备料清单中长文本（尤其位号）因 Excel 固定行高/未自动换行，换行后内容被裁切、看起来像漏器件的问题。</li>
+          <li>导出时按分隔符智能换行，并按内容自动加高对应行；相关单元格启用自动换行。</li>
+          <li>汇总类清单的位号汇总不再按 220 字截断。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.23 网页版</strong><time>2026-08-20</time></div>
+        <ul>
+          <li>装配清单「领料数」改为 Excel 公式：单机数 × 本次装配数量（G3）。导出后只需改顶部「本次装配数量」，各行领料数会自动重算。</li>
+          <li>同步内置采购清单公司默认模板。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.22 网页版</strong><time>2026-08-17</time></div>
+        <ul>
+          <li>装配变量（Variant）改为“页面提示 + 手动输入”兜底：原始 BOM 没有该列时页面黄色提醒，并在“项目信息”卡片新增单独的装配变量输入框；两者都空时才按“整机采购”处理，不再硬性阻止生成。</li>
+          <li>修正“页面修改项目工号/产品型号/时间等信息，生成的清单却不变”的问题 —— 新装配清单模板元数据统一写入值合并块的左上角（C1 产品型号 / C2 生成时间 / G2 装配变量 / C3 项目工号·名称 / G3 本次装配数量）。</li>
+          <li>同步更新最新版 v17 装配清单模板：新增领料数量列（总数量 = 单机数量 × 生产数量），厂家、封装、备注列后移一位。</li>
+          <li>装配清单模板顶部单元格式与公司 v17 版式一致，保留字体、边框、合并单元格、打印设置与分页预览。</li>
+          <li>领料单归入“其他报表”按需勾选，不再作为常用清单默认勾选。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.21 网页版</strong><time>2026-08-17</time></div>
+        <ul>
+          <li>导入的 BOM 如包含“装配变量（Variant）”列，优先使用该列值；列值为空时，若“项目信息”卡的“装配变量”输入框填了值，会使用该输入框值；两者都未填时按“整机采购”处理。</li>
+          <li>装配变量自动写入装配清单模板顶部的“装配变量”右侧单元格（G2 合并块）。</li>
+          <li>装配清单模板升级：新增“领料数量”列（总数量 = 单机数量 × 生产数量），厂家、封装、备注列顺序相应后移。</li>
+          <li>装配清单模板使用用户提供的 v17 版本，保留字体、字号、边框、合并单元格和打印设置。</li>
+          <li>领料单不再作为常用清单默认勾选，用户需要时可在“其他报表”中手动勾选。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.20 网页版</strong><time>2026-08-13</time></div>
+        <ul>
+          <li>修复网页版“更改”保存位置按钮无反应的问题。</li>
+          <li>最新版 Edge/Chrome 可直接选择保存文件夹；其他浏览器会明确提示并继续使用系统下载目录。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.19 网页版</strong><time>2026-08-13</time></div>
+        <ul>
+          <li>按当前勾选清单及其实际模板，完整列出模板需要的全部数据列。</li>
+          <li>区分原表已识别、程序可推导、自动填写、模板允许留空和真正缺少。</li>
+          <li>名称、封装已从 Value 等字段成功推导时不再误报缺少。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.18 网页版</strong><time>2026-08-13</time></div>
+        <ul>
+          <li>改为公司默认浏览器运行，由浏览器进程读取料单，以适配绿盾透明解密策略。</li>
+          <li>发布包不再包含 EXE，避免同事误用未获绿盾授权的桌面进程。</li>
+          <li>保留 V1.17 的真实 GBK、旧版 XLS 和非标准 XLSX 中文读取修复。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.17</strong><time>2026-08-13</time></div>
+        <ul>
+          <li>修复桌面版导入部分 ERP/AD 导出的非标准 XLSX 时中文乱码。</li>
+          <li>XLSX 自动读取会同时比较标准 UTF-8、GBK 和 Big5 结果，不再因乱码较少而漏检。</li>
+          <li>启动时校验中文代码页是否真正可用。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.16</strong><time>2026-08-13</time></div>
+        <ul>
+          <li>表头提示只显示当前已勾选清单缺少的字段。</li>
+          <li>已识别字段和未勾选清单的字段要求不再占用提示区域。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.15</strong><time>2026-08-13</time></div>
+        <ul>
+          <li>新增 Windows 桌面版，可直接双击 EXE 运行。</li>
+          <li>可自行选择文件保存目录，程序会记住上次选择的位置。</li>
+          <li>生成的多个 Excel 会直接写入指定目录，并显示完整保存路径。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.13</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>彻底取消多清单 ZIP：勾选几类清单，就分别直接下载几个 Excel 文件。</li>
+          <li>多个 BOM 分别生成时，每个 BOM、每类清单都直接下载，并自动加入 BOM 文件名前缀防止重名。</li>
+          <li>多个 BOM 合并汇总时，每类勾选清单仍分别下载一个 Excel，不再打包。</li>
+          <li>浏览器首次询问是否允许下载多个文件时，选择允许即可。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.12</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>多清单 ZIP 改用 Windows 兼容性更稳定的 STORE 模式，避免对已压缩的 XLSX 再次压缩。</li>
+          <li>打包后逐个文件完整解压并逐字节比对，任一文件不一致都会停止下载。</li>
+          <li>下载 Blob 地址不再按固定时间提前释放，避免慢速写盘或杀毒扫描造成 ZIP 尾部截断。</li>
+          <li>已用 Windows 自带解压和 Microsoft Excel 验证四个常用清单，无修复提示。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.11</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>内置外协阻容备料清单公司默认模板，完整保留 16 列、字体、字号、边框、分类行和表尾。</li>
+          <li>外协阻容提升为常用清单，默认勾选并支持单独指定或恢复公司默认模板。</li>
+          <li>只导出电阻、电容；单机数量汇总原数量，装机总数和采购总数按生产数量相乘。</li>
+          <li>保留分页预览、重复表头、页码以及“新研/重复研制”和签字栏。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.10</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>领料单分类行改为模板原有的宋体 9 号粗体样式，物料备注统一写入红色粗体“电装”。</li>
+          <li>领料单和采购清单恢复分页预览，按实际数据自动扩展打印区域并显示“第几页、共几页”。</li>
+          <li>每一页自动重复打印前三行表头，数据超过一页时可直接看到“第1页、第2页”等分页。</li>
+          <li>修复采购清单表尾被误清空的问题，完整保留复选项、提出人、日期、部门领导和签收人栏。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.9</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>新增“需要的表头”检查区，所有相关字段始终显示。</li>
+          <li>已识别表头显示绿色，缺失表头显示红色并说明影响的清单和列。</li>
+          <li>表头提示会随导入模式、勾选的输出清单和手动字段对应实时变化。</li>
+          <li>继续保留 v1.8 的多文件 ZIP 完整性校验和安全下载修复。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.8</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>修复同时导出多个 Excel 时，部分 Windows 电脑提示 ZIP 损坏的问题。</li>
+          <li>压缩包生成后自动校验文件头、中央目录、文件数量和 CRC，校验失败不会下载残缺文件。</li>
+          <li>延长浏览器下载地址的保留时间，避免大压缩包尚未写完就被释放。</li>
+          <li>重复文件名自动编号，防止同名清单在压缩包内互相覆盖。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.7</strong><time>2026-08-12</time></div>
+        <ul>
+          <li>补齐装配清单名称、封装推导。</li>
+          <li>领料与采购清单增加原模板样式的加粗分类行。</li>
+          <li>清理失效计算链和外部链接，消除 Excel“已修复”提示与黑灰打开区域。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.6 及更早</strong></div>
+        <ul>
+          <li>内置装配、领料、采购公司模板，保留字体、字号、边框和打印设置。</li>
+          <li>支持多个 BOM、自动表头识别、乱码编码修正、分 BOM 或合并导出。</li>
+        </ul>
+      </section>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="vendor/cpexcel.full.js"></script>
+  <script src="vendor/xlsx.bundle.js"></script>
+  <script src="vendor/jszip.min.js"></script>
+  <script src="zip-utils.js"></script>
+  <script src="bom-core.js"></script>
+  <script src="excel-reader.js"></script>
+  <script src="default-templates.js"></script>
+  <script src="template-exporter.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
