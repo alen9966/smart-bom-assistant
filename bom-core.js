@@ -635,6 +635,7 @@
           quantity: 0,
           designators: [],
           sourceRows: [],
+          sourceFiles: [],
           purchaseBases: []
         });
       }
@@ -642,10 +643,13 @@
       group.quantity += Number(row.quantity || 0);
       group.designators.push(row.designator);
       group.sourceRows.push(`${row.sourceFile ? `${row.sourceFile} / ` : ""}${row.sourceSheet}!${row.sourceRow}`);
+      if (row.sourceFile) group.sourceFiles.push(row.sourceFile);
+      if (Array.isArray(row.sourceFiles)) group.sourceFiles.push(...row.sourceFiles);
       if (row.purchaseBasis) group.purchaseBases.push(row.purchaseBasis);
     });
     return [...groups.values()].map((group) => ({
       ...group,
+      sourceFiles: [...new Set((group.sourceFiles || []).filter(Boolean))],
       // 位号完整保留，避免 Excel 单元格显示不下时被程序侧先截断丢失
       designatorSummary: uniqueJoined(group.designators, 30000),
       traceSummary: uniqueJoined(group.sourceRows, 220),
@@ -671,6 +675,49 @@
     return /^PCB\d*$/i.test(designator);
   }
 
+  function pcbRevisionFromFilename(filename) {
+    const name = text(filename).replace(/\\/g, "/").split("/").pop() || "";
+    const match = name.match(/(ZC\d+(?:\.\d+)*)[_-]V([\d.]+)/i);
+    if (!match) return "";
+    const version = String(match[2] || "").replace(/\.+$/, "");
+    if (!version) return "";
+    return `${match[1].toUpperCase()}-V${version}`;
+  }
+
+  function uniquePcbRevisionsFromNames(names) {
+    const seen = new Set();
+    const list = [];
+    (names || []).forEach((name) => {
+      const revision = pcbRevisionFromFilename(name);
+      if (!revision || seen.has(revision)) return;
+      seen.add(revision);
+      list.push(revision);
+    });
+    return list;
+  }
+
+  function sourceFilenames(rows, options) {
+    const names = [];
+    if (options && options.sourceFile) names.push(options.sourceFile);
+    (rows || []).forEach((row) => {
+      if (row && row.sourceFile) names.push(row.sourceFile);
+      if (row && Array.isArray(row.sourceFiles)) names.push(...row.sourceFiles);
+    });
+    return names;
+  }
+
+  function printedBoardRevisions(rows, options) {
+    if (Array.isArray(options && options.pcbRevisions)) {
+      const explicit = [...new Set(options.pcbRevisions.map(text).filter(Boolean))];
+      if (explicit.length) return explicit;
+    }
+    const fromFiles = uniquePcbRevisionsFromNames(sourceFilenames(rows, options));
+    if (fromFiles.length) return fromFiles;
+    const manual = text(options && options.pcbRevision);
+    if (!manual) return [];
+    return [pcbRevisionFromFilename(manual) || manual];
+  }
+
   function makePrintedBoardRow(options) {
     const revision = text(options && options.pcbRevision);
     const vendor = text(options && options.pcbVendor);
@@ -693,8 +740,8 @@
       assemblyName: "",
       remark: "",
       purchased: true,
-      purchaseBasis: "页面填写的印制板",
-      sourceFile: "项目信息",
+      purchaseBasis: text(options && options.purchaseBasis) || "页面填写的印制板",
+      sourceFile: text(options && options.sourceFile) || "项目信息",
       sourceSheet: "项目信息",
       sourceRow: "",
       errors: [],
@@ -705,21 +752,35 @@
 
   function withPrintedBoard(rows, options) {
     const vendor = text(options && options.pcbVendor);
-    const revision = text(options && options.pcbRevision);
-    if (!revision || !vendor) return rows || [];
+    if (!vendor) return rows || [];
+    const revisions = printedBoardRevisions(rows, options);
+    if (!revisions.length) return rows || [];
+    const filenames = sourceFilenames(rows, options);
     const next = (rows || []).map((row) => {
       if (!isPrintedBoard(row)) return row;
+      const matched = revisions.find((revision) => [row.model, row.description, row.drawingNo, row.partNumber].some((value) => text(value) === revision));
+      const fallback = revisions.length === 1 ? revisions[0] : "";
       return {
         ...row,
         category: "印制板",
         vendor,
-        model: text(row.model) || revision || row.model,
-        description: text(row.description) || revision || row.description
+        model: text(row.model) || matched || fallback || row.model,
+        description: text(row.description) || matched || fallback || row.description
       };
     });
-    const already = next.some((row) => isPrintedBoard(row) && [row.model, row.description, row.drawingNo, row.partNumber].some((value) => text(value) === revision));
-    if (already) return next;
-    return [...next, makePrintedBoardRow(options || {})];
+    const extras = [];
+    revisions.forEach((revision) => {
+      const already = next.some((row) => isPrintedBoard(row) && [row.model, row.description, row.drawingNo, row.partNumber].some((value) => text(value) === revision));
+      if (already) return;
+      const fromFile = filenames.find((name) => pcbRevisionFromFilename(name) === revision) || "";
+      extras.push(makePrintedBoardRow({
+        ...options,
+        pcbRevision: revision,
+        sourceFile: fromFile || "项目信息",
+        purchaseBasis: fromFile ? "文件名识别的印制板" : "页面填写的印制板"
+      }));
+    });
+    return extras.length ? [...next, ...extras] : next;
   }
 
   function resistorCapacitorType(row) {
@@ -1138,7 +1199,9 @@
       ...options,
       multiplier: Number(metadata.multiplier || 1),
       pcbRevision: metadata.pcbRevision,
-      pcbVendor: metadata.pcbVendor
+      pcbVendor: metadata.pcbVendor,
+      pcbRevisions: metadata.pcbRevisions,
+      sourceFile: metadata.sourceFile
     });
     const selectedOutputs = (options.selectedOutputs || []).filter((key) => OUTPUT_DEFS[key]);
     if (!selectedOutputs.length) throw new Error("请至少选择一种需要生成的清单。");
@@ -1186,6 +1249,9 @@
     revalidateRow,
     purchaseDecision,
     isPrintedBoard,
+    pcbRevisionFromFilename,
+    printedBoardRevisions,
+    withPrintedBoard,
     buildOutputs,
     inspectTemplate,
     makeTemplateSheet,

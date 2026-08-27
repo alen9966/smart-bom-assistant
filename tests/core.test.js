@@ -64,7 +64,46 @@ assert.equal(pcbOnlyRevision.procurement.some((row) => row.category === "印制�
 const pcbOnlyVendor = Core.buildOutputs(extracted.rows, {
   skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbRevision: "", pcbVendor: "嘉立创"
 });
-assert.equal(pcbOnlyVendor.procurement.some((row) => row.category === "印制板"), false, "只填 PCB板厂时不应出现印制板分类");
+assert.equal(pcbOnlyVendor.procurement.some((row) => row.category === "印制板"), false, "只填 PCB板厂且无法识别版号时不应出现印制板分类");
+
+assert.equal(Core.pcbRevisionFromFilename("ZC7.820.0198_V2_子板_BOM.xlsx"), "ZC7.820.0198-V2", "文件名中的 _V2 应规范为 -V2");
+assert.equal(Core.pcbRevisionFromFilename("ZC7.820.0016_V1.0_控制板.xlsx"), "ZC7.820.0016-V1.0", "应保留 V1.0 小版本");
+assert.equal(Core.pcbRevisionFromFilename("ZC7.820.0155-V3.xlsx"), "ZC7.820.0155-V3", "已带连字符的版号应原样识别");
+assert.equal(Core.pcbRevisionFromFilename("普通料单.xlsx"), "", "无法识别时应返回空");
+
+const pcbFromFilename = Core.buildOutputs(
+  extracted.rows.map((row) => ({ ...row, sourceFile: "ZC7.820.0198_V2_子板_BOM.xlsx" })),
+  { skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbRevision: "", pcbVendor: "嘉立创" }
+);
+const pcbFromFilenameRow = pcbFromFilename.procurement.find((row) => row.category === "印制板");
+assert.ok(pcbFromFilenameRow, "填写板厂且文件名能识别版号时，应追加印制板");
+assert.equal(pcbFromFilenameRow.model, "ZC7.820.0198-V2", "印制板名称应取自文件名版号");
+assert.equal(pcbFromFilenameRow.vendor, "嘉立创", "印制板厂家应使用页面板厂");
+assert.equal(pcbFromFilenameRow.purchaseBasis, "文件名识别的印制板", "来源应标明由文件名识别");
+
+const pcbIgnoreStaleManual = Core.buildOutputs(
+  extracted.rows.map((row) => ({ ...row, sourceFile: "ZC7.820.0198_V2_子板_BOM.xlsx" })),
+  { skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbRevision: "ZC7.820.0155-V3", pcbVendor: "嘉立创" }
+);
+assert.equal(pcbIgnoreStaleManual.procurement.filter((row) => row.category === "印制板").length, 1, "文件名已识别版号时，页面旧版号不应再追加一行");
+assert.equal(pcbIgnoreStaleManual.procurement.some((row) => row.model === "ZC7.820.0198-V2"), true, "应以文件名版号为准");
+assert.equal(pcbIgnoreStaleManual.procurement.some((row) => row.model === "ZC7.820.0155-V3"), false, "页面残留版号不得混入");
+
+const pcbMultiFiles = Core.buildOutputs([
+  ...extracted.rows.map((row) => ({ ...row, sourceFile: "ZC7.820.0198_V2_子板_BOM.xlsx" })),
+  ...extracted.rows.map((row) => ({ ...row, sourceFile: "ZC7.820.0016_V1.0_BOM.xlsx" }))
+], { skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbVendor: "嘉立创" });
+assert.deepEqual(
+  pcbMultiFiles.procurement.filter((row) => row.category === "印制板").map((row) => row.model).sort(),
+  ["ZC7.820.0016-V1.0", "ZC7.820.0198-V2"],
+  "合并多个 BOM 时应按文件名追加多个印制板版号"
+);
+
+const pcbUnparsedFilename = Core.buildOutputs(
+  extracted.rows.map((row) => ({ ...row, sourceFile: "普通料单.xlsx" })),
+  { skipInvalid: true, purchaseMode: "auto", multiplier: 4, pcbVendor: "嘉立创" }
+);
+assert.equal(pcbUnparsedFilename.procurement.some((row) => row.category === "印制板"), false, "文件名无法识别且未填版号时，即使填了板厂也不应追加印制板");
 
 const assemblyExtracted = Core.extractRows(sheet, mapping, 1);
 const mechanicalRow = { ...assemblyExtracted.rows[0], partNumber: "M-001", designator: "M1", description: "安装螺钉", model: "M3", quantityRaw: "3", baseQuantity: 3, quantity: 3, errors: [], warnings: [], status: "ok" };

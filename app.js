@@ -288,13 +288,35 @@
     $("#bomFileList").innerHTML = "";
     $("#mappingPanel").classList.add("hidden");
     $("#previewPanel").classList.add("hidden");
+    renderPcbRevisionHint();
     setStep(1);
     updateOutputCounts();
     updateGenerationState();
   }
 
+  function documentPcbRevision(documentItem) {
+    return BOMCore.pcbRevisionFromFilename(documentItem && documentItem.file && documentItem.file.name);
+  }
+
+  function renderPcbRevisionHint() {
+    const hint = $("#pcbRevisionHint");
+    if (!hint) return;
+    const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
+    const unnamed = state.documents.filter((item) => !documentPcbRevision(item)).length;
+    if (!state.documents.length) {
+      hint.textContent = "上传 BOM 后自动从文件名识别版号，一般只需填写板厂。";
+      return;
+    }
+    if (revisions.length) {
+      hint.textContent = `已从文件名识别 ${revisions.length} 个版号：${revisions.join("、")}${unnamed ? `；另有 ${unnamed} 个文件未能识别，可在上方补填` : "。分别生成时各用本文件版号，合并时每个版号一行。"}`;
+      return;
+    }
+    hint.textContent = "当前文件名未能识别版号，可手动填写；填了板厂后才会追加印制板。";
+  }
+
   function renderBomFileList() {
     const container = $("#bomFileList");
+    renderPcbRevisionHint();
     if (!state.documents.length) {
       container.classList.add("hidden");
       return;
@@ -302,7 +324,8 @@
     container.classList.remove("hidden");
     container.innerHTML = state.documents.map((documentItem, index) => {
       const errorCount = (documentItem.rows || []).filter((row) => row.errors.length).length;
-      return `<button class="bom-file-chip ${documentItem.id === state.activeDocumentId ? "active" : ""}" data-document-id="${documentItem.id}" type="button"><strong>${index + 1}. ${escapeHtml(documentItem.file.name)}</strong><em>${errorCount ? `${errorCount} 错误` : `${documentItem.rows.length} 行`}</em></button>`;
+      const revision = documentPcbRevision(documentItem);
+      return `<button class="bom-file-chip ${documentItem.id === state.activeDocumentId ? "active" : ""}" data-document-id="${documentItem.id}" type="button"><strong>${index + 1}. ${escapeHtml(documentItem.file.name)}</strong><span class="chip-meta">${revision ? `<em class="pcb-rev" title="PCB版号">${escapeHtml(revision)}</em>` : ""}<em>${errorCount ? `${errorCount} 错误` : `${documentItem.rows.length} 行`}</em></span></button>`;
     }).join("");
     container.querySelectorAll("[data-document-id]").forEach((button) => button.addEventListener("click", () => activateDocument(button.dataset.documentId)));
   }
@@ -582,7 +605,19 @@
     else if (!allRows.length) note.textContent = "表头下方没有找到可处理的数据";
     else if (!state.selectedOutputs.size) note.textContent = "请至少勾选一种清单";
     else if (errorCount) note.textContent = `有 ${errorCount} 行错误；生成时将${$("#skipInvalid").checked ? "跳过错误行，并附问题清单" : "保留问题清单"}`;
-    else note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪`;
+    else {
+      const vendor = $("#pcbVendor").value.trim();
+      const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
+      const manualRevision = $("#pcbRevision").value.trim();
+      if (vendor && (revisions.length || manualRevision)) {
+        const count = revisions.length || 1;
+        note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪；采购清单将追加 ${count} 个印制板版号`;
+      } else if (!vendor && (revisions.length || manualRevision)) {
+        note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪；填写 PCB 板厂后才会追加印制板`;
+      } else {
+        note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪`;
+      }
+    }
   }
 
   async function handleFile(file) {
@@ -951,7 +986,11 @@
 
       if (state.exportMode === "combined") {
         const combinedRows = state.documents.flatMap((documentItem) => documentItem.rows || []);
-        const combinedMetadata = { ...baseMetadata, sourceFile: `${state.documents.length} 个 BOM 合并` };
+        const combinedMetadata = {
+          ...baseMetadata,
+          sourceFile: `${state.documents.length} 个 BOM 合并`,
+          pcbRevisions: [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))]
+        };
         const result = await buildOutputFiles(combinedRows, combinedMetadata, commonOptions);
         const saved = await downloadOutputFiles(result.files);
         toast(completionMessage(result.files.length, saved));

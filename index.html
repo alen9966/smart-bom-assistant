@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.31 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.32 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -141,8 +141,9 @@
               <label><span>生产数量</span><input id="multiplier" type="number" min="0.0001" step="any" value="1"></label>
               <label class="wide"><span>装配变量（如原始 BOM 没有此列，可在此手动填写；未填写时按“整机采购”处理）</span><input id="variant" autocomplete="off" placeholder="例如 整机采购 / 控制板A / 主控板B"></label>
               <label class="wide"><span>使用部门</span><input id="department" autocomplete="off" placeholder="例如 设备与系统"></label>
-              <label><span>PCB版号</span><input id="pcbRevision" autocomplete="off" placeholder="例如 ZC7.820.0155-V3"></label>
               <label><span>PCB板厂</span><input id="pcbVendor" autocomplete="off" placeholder="例如 嘉立创"></label>
+              <label><span>PCB版号（可空）</span><input id="pcbRevision" autocomplete="off" placeholder="可空，优先从文件名识别"></label>
+              <p class="field-hint" id="pcbRevisionHint">上传 BOM 后自动从文件名识别版号，一般只需填写板厂。</p>
             </div>
 
             <div class="divider"></div>
@@ -204,6 +205,13 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.32 网页版</strong><time>2026-08-27</time></div>
+        <ul>
+          <li>同时上传多个 BOM 时，文件条自动换行，不再横向撑开与右侧项目信息重叠。</li>
+          <li>采购清单「印制板」版号改为从各 BOM 文件名自动识别（如 <code>ZC7.820.0198_V2_子板_BOM.xlsx</code> → <code>ZC7.820.0198-V2</code>），一般只需填写板厂；页面版号仅在文件名无法识别时作为兜底。</li>
+        </ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.31 网页版</strong><time>2026-08-24</time></div>
         <ul>
           <li>采购清单「印制板」分类改为：页面「PCB版号」和「PCB板厂」都填写后才追加；只填其中一项时不出现该分类。</li>

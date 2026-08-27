@@ -760,7 +760,9 @@
       ...options,
       multiplier: Number(metadata.multiplier || 1),
       pcbRevision: metadata.pcbRevision,
-      pcbVendor: metadata.pcbVendor
+      pcbVendor: metadata.pcbVendor,
+      pcbRevisions: metadata.pcbRevisions,
+      sourceFile: metadata.sourceFile
     });
     const selected = (options.selectedOutputs || []).filter((key) => core.OUTPUT_DEFS[key]);
     if (!selected.length) throw new Error("请至少选择一种需要生成的清单");
