@@ -201,7 +201,9 @@
     };
     container.innerHTML = `${primary.length ? `<div class="output-group-title">常用清单 · 默认勾选</div>${primary.map(renderOption).join("")}` : ""}
       ${secondary.length ? `<details class="other-outputs"><summary>其他报表（${secondary.length} 类）</summary><div class="other-output-list">${secondary.map(renderOption).join("")}</div></details>` : ""}`;
-    $("#modeExportHint").textContent = state.mode === "bom" ? "默认生成装配、采购和外协阻容三类常用清单" : "默认生成外协阻容备料清单；仅外协阻容数量放大";
+    $("#modeExportHint").textContent = state.mode === "bom"
+      ? "默认生成装配、采购；外协阻容从表中采购清单的电阻电容导出"
+      : "默认生成外协阻容备料清单（外购阻容 × 生产数量）";
     $("#toggleAllOutputs").textContent = available.length && available.every((key) => state.selectedOutputs.has(key)) ? "取消全选" : "全选";
     container.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
       if (input.classList.contains("template-input")) return;

@@ -38,7 +38,7 @@
     procurement: { label: "采购清单", description: "仅汇总判定为外购的物料", modes: ["bom"], primary: true },
     detail: { label: "明细表", description: "标准化后的完整可追溯明细", modes: ["bom", "assembly"] },
     purchased: { label: "外购件汇总表", description: "按厂家、型号归集外购需求", modes: ["bom", "assembly"] },
-    subcontract: { label: "外协阻容备料清单", description: "仅筛选电阻、电容，并按生产数量计算", modes: ["bom", "assembly"], primary: true }
+    subcontract: { label: "外协阻容备料清单", description: "从采购清单中筛选电阻、电容，按生产数量生成外协备料表", modes: ["bom", "assembly"], primary: true }
   };
 
   const HEADER_REQUIREMENTS = [
@@ -810,7 +810,9 @@
     });
     const purchasedRows = withPurchase.filter((row) => row.purchased);
     const subcontractMultiplier = Number(options.multiplier || 1);
-    const subcontractSource = withPurchase
+    // 外协阻容 = 采购清单中的电阻/电容（与外购判定一致），再按生产数量计算
+    const subcontractSource = purchasedRows
+      .filter((row) => !isPrintedBoard(row))
       .map((row) => ({ ...row, componentType: resistorCapacitorType(row) }))
       .filter((row) => row.componentType)
       .map((row) => ({ ...row, quantity: baseQuantityOf(row) * subcontractMultiplier }));

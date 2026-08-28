@@ -116,6 +116,30 @@ assert.equal(assemblyOutputs.subcontract.find((row) => row.partNumber === "R-001
 
 const bomOutputsWithSubcontract = Core.buildOutputs(extracted.rows, { skipInvalid: true, purchaseMode: "auto", multiplier: 4 });
 assert.equal(bomOutputsWithSubcontract.subcontract.find((row) => row.partNumber === "R-001").quantity, 8, "BOM 已放大的数量在外协清单中不得重复相乘");
+assert.ok(bomOutputsWithSubcontract.procurement.some((row) => row.partNumber === "R-001"), "外购电阻应进入采购清单");
+assert.ok(bomOutputsWithSubcontract.subcontract.every((row) => bomOutputsWithSubcontract.procurement.some((item) => item.partNumber === row.partNumber || item.model === row.model)), "外协阻容应全部来自采购清单中的阻容");
+
+const selfMadeResistor = {
+  ...extracted.rows[0],
+  partNumber: "R-SELF",
+  designator: "R99",
+  description: "电阻",
+  model: "10kΩ",
+  source: "自制",
+  vendor: "",
+  quantityRaw: "1",
+  baseQuantity: 1,
+  quantity: 4,
+  errors: [],
+  warnings: [],
+  status: "ok"
+};
+const subcontractFromProcurement = Core.buildOutputs([...extracted.rows, selfMadeResistor], {
+  skipInvalid: true, purchaseMode: "auto", multiplier: 4
+});
+assert.equal(subcontractFromProcurement.procurement.some((row) => row.partNumber === "R-SELF"), false, "自制电阻不得进入采购清单");
+assert.equal(subcontractFromProcurement.subcontract.some((row) => row.partNumber === "R-SELF"), false, "自制电阻不得进入外协阻容备料表");
+assert.ok(subcontractFromProcurement.subcontract.some((row) => row.partNumber === "R-001"), "采购清单中的外购电阻应导出到外协阻容备料表");
 
 const subcontractOnly = Core.buildWorkbook(assemblyExtracted.rows, {
   projectCode: "TEST-OUTSOURCE",
