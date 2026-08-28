@@ -117,7 +117,7 @@ assert.equal(assemblyOutputs.subcontract.find((row) => row.partNumber === "R-001
 const bomOutputsWithSubcontract = Core.buildOutputs(extracted.rows, { skipInvalid: true, purchaseMode: "auto", multiplier: 4 });
 assert.equal(bomOutputsWithSubcontract.subcontract.find((row) => row.partNumber === "R-001").quantity, 8, "BOM 已放大的数量在外协清单中不得重复相乘");
 assert.ok(bomOutputsWithSubcontract.procurement.some((row) => row.partNumber === "R-001"), "外购电阻应进入采购清单");
-assert.ok(bomOutputsWithSubcontract.subcontract.every((row) => bomOutputsWithSubcontract.procurement.some((item) => item.partNumber === row.partNumber || item.model === row.model)), "外协阻容应全部来自采购清单中的阻容");
+assert.ok(bomOutputsWithSubcontract.subcontract.every((row) => bomOutputsWithSubcontract.procurement.some((item) => item.partNumber === row.partNumber || item.model === row.model)), "BOM 模式下外协阻容应来自外购物料");
 
 const selfMadeResistor = {
   ...extracted.rows[0],
@@ -134,12 +134,45 @@ const selfMadeResistor = {
   warnings: [],
   status: "ok"
 };
-const subcontractFromProcurement = Core.buildOutputs([...extracted.rows, selfMadeResistor], {
-  skipInvalid: true, purchaseMode: "auto", multiplier: 4
+const subcontractFromPurchased = Core.buildOutputs([...extracted.rows, selfMadeResistor], {
+  skipInvalid: true, purchaseMode: "auto", multiplier: 4, mode: "bom"
 });
-assert.equal(subcontractFromProcurement.procurement.some((row) => row.partNumber === "R-SELF"), false, "自制电阻不得进入采购清单");
-assert.equal(subcontractFromProcurement.subcontract.some((row) => row.partNumber === "R-SELF"), false, "自制电阻不得进入外协阻容备料表");
-assert.ok(subcontractFromProcurement.subcontract.some((row) => row.partNumber === "R-001"), "采购清单中的外购电阻应导出到外协阻容备料表");
+assert.equal(subcontractFromPurchased.procurement.some((row) => row.partNumber === "R-SELF"), false, "自制电阻不得进入采购清单");
+assert.equal(subcontractFromPurchased.subcontract.some((row) => row.partNumber === "R-SELF"), false, "BOM 模式下自制电阻不得进入外协阻容");
+assert.ok(subcontractFromPurchased.subcontract.some((row) => row.partNumber === "R-001"), "外购电阻应进入外协阻容");
+
+const procurementWorkbook = XLSX.read(Buffer.from(DefaultTemplates.procurement.base64, "base64"), { type: "buffer" });
+const procurementAnalysis = Core.analyzeWorkbook(procurementWorkbook);
+assert.equal(procurementAnalysis.hasRecognizedSheet, true, "应识别公司采购清单表头");
+const procurementSheet = procurementAnalysis.sheets.find((item) => item.index === procurementAnalysis.bestSheetIndex) || procurementAnalysis.sheets[0];
+assert.equal(procurementSheet.headerRowIndex, 2, "采购清单表头应在第 3 行");
+const procurementMapping = procurementSheet.suggestions.map((item) => item.field || "");
+assert.equal(procurementMapping.includes("quantity"), true, "应识别单机数量");
+assert.equal(procurementMapping.includes("model"), true, "应识别名称、型号");
+assert.equal(procurementMapping.includes("vendor"), true, "应识别生产厂家");
+const procurementExtracted = Core.extractRows(procurementSheet, procurementMapping, 1, { carryCategory: true });
+assert.ok(procurementExtracted.skippedCategoryRows >= 2, "应跳过电阻/电容分类行");
+assert.ok(procurementExtracted.rows.length >= 80, "应读出采购物料行");
+assert.equal(procurementExtracted.rows[0].category, "电容", "分类行应继承到后续物料");
+assert.equal(Core.OUTPUT_DEFS.subcontract.modes.includes("procurement"), true, "外协阻容应支持采购清单导入模式");
+const fromProcurement = Core.buildOutputs(procurementExtracted.rows, {
+  skipInvalid: true, multiplier: 4, mode: "procurement"
+});
+assert.ok(fromProcurement.subcontract.length >= 80, "导入采购清单后应导出外协阻容备料行");
+assert.ok(fromProcurement.subcontract.every((row) => row.componentType === "电阻" || row.componentType === "电容"), "外协表应仅含电阻电容");
+assert.equal(fromProcurement.subcontract[0].baseQuantity, 1, "外协单机数量应取采购清单单机数量");
+assert.equal(fromProcurement.subcontract[0].quantity, 4, "外协备料数量应为单机数量×生产数量");
+const procurementOnlyBook = Core.buildWorkbook(procurementExtracted.rows, {
+  projectCode: "TEST-PROC",
+  projectName: "采购转外协",
+  multiplier: 4,
+  sourceFile: "采购清单.xlsx",
+  mode: "procurement"
+}, {
+  selectedOutputs: ["subcontract"],
+  skipInvalid: true
+});
+assert.deepEqual(procurementOnlyBook.workbook.SheetNames, ["导出说明", "外协阻容备料清单", "数据问题清单"]);
 
 const subcontractOnly = Core.buildWorkbook(assemblyExtracted.rows, {
   projectCode: "TEST-OUTSOURCE",

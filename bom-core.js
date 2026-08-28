@@ -16,15 +16,15 @@
     { key: "designator", label: "位号", aliases: ["位号", "元件位号", "参考位号", "器件位号", "reference", "designator", "refdes", "ref des", "location"] },
     { key: "partNumber", label: "物料编码", aliases: ["物料编码", "物料编号", "物料号", "物资编码", "物资编号", "编码", "存货编码", "零件编号", "part number", "part no", "partnumber", "pn", "item code", "material code", "sku"] },
     { key: "description", label: "物料名称", aliases: ["物料名称", "名称", "元件名称", "零件名称", "品名", "描述", "器件描述", "description", "comment", "part name", "item name", "component"] },
-    { key: "model", label: "型号 / 规格", aliases: ["型号", "规格", "型号规格", "型号/规格", "规格型号", "参数", "数值", "型号value", "value", "model", "spec", "specification", "device"] },
+    { key: "model", label: "型号 / 规格", aliases: ["名称、型号", "名称型号", "名称/型号", "型号", "规格", "型号规格", "型号/规格", "规格型号", "参数", "数值", "型号value", "value", "model", "spec", "specification", "device"] },
     { key: "footprint", label: "封装", aliases: ["封装", "封装形式", "PCB封装", "器件封装", "footprint", "package", "pcb footprint"] },
     { key: "quality", label: "质量等级", aliases: ["质量等级", "质量", "质量级别", "等级", "质量等级quality", "quality", "quality level", "grade"] },
-    { key: "quantity", label: "数量", aliases: ["数量", "用量", "单机用量", "需求数量", "总数量", "装配数量", "数量quantity", "qty", "quantity", "count", "amount"] },
+    { key: "quantity", label: "数量", aliases: ["单机数量", "单机数", "数量", "用量", "单机用量", "需求数量", "总数量", "装配数量", "数量quantity", "qty", "quantity", "count", "amount"] },
     { key: "unit", label: "单位", aliases: ["单位", "计量单位", "基本单位", "unit", "uom"] },
-    { key: "vendor", label: "厂家 / 供应商", aliases: ["厂家", "厂商", "制造商", "供应商", "品牌", "厂家vendor", "vendor", "supplier", "manufacturer", "mfr", "brand"] },
+    { key: "vendor", label: "厂家 / 供应商", aliases: ["生产厂家", "厂家", "厂商", "制造商", "供应商", "品牌", "厂家vendor", "vendor", "supplier", "manufacturer", "mfr", "brand"] },
     { key: "manufacturerPartNumber", label: "厂家料号", aliases: ["厂家料号", "制造商料号", "厂商型号", "厂家型号", "mpn", "manufacturer part number", "mfr part"] },
     { key: "source", label: "来源 / 自制外购", aliases: ["来源", "物料来源", "采购属性", "自制外购", "自制/外购", "外购", "物料属性", "供货方式", "source", "make or buy", "make/buy", "procurement type"] },
-    { key: "drawingNo", label: "图号", aliases: ["图号", "图纸号", "零件图号", "drawing", "drawing no", "drawing number"] },
+    { key: "drawingNo", label: "图号", aliases: ["代号", "图号", "图纸号", "零件图号", "drawing", "drawing no", "drawing number"] },
     { key: "assemblyName", label: "装配项目", aliases: ["装配清单", "装配项目", "装配名称", "组件名称", "组件", "总成", "assembly", "assembly name", "subassembly"] },
     { key: "variant", label: "装配变量", aliases: ["装配变量", "变量", "变量名", "variant", "variation", "bom variant"] },
     { key: "remark", label: "备注", aliases: ["备注", "说明", "注释", "特殊要求", "remark", "remarks", "note", "notes"] }
@@ -38,7 +38,7 @@
     procurement: { label: "采购清单", description: "仅汇总判定为外购的物料", modes: ["bom"], primary: true },
     detail: { label: "明细表", description: "标准化后的完整可追溯明细", modes: ["bom", "assembly"] },
     purchased: { label: "外购件汇总表", description: "按厂家、型号归集外购需求", modes: ["bom", "assembly"] },
-    subcontract: { label: "外协阻容备料清单", description: "从采购清单中筛选电阻、电容，按生产数量生成外协备料表", modes: ["bom", "assembly"], primary: true }
+    subcontract: { label: "外协阻容备料清单", description: "筛选电阻、电容，按生产数量生成外协备料表", modes: ["bom", "assembly", "procurement"], primary: true }
   };
 
   const HEADER_REQUIREMENTS = [
@@ -192,6 +192,8 @@
     const a = normalizeText(alias);
     if (!h || !a) return 0;
     if (h === a) return 1;
+    // 「编号/序号」不要被「物料编号」等长别名误匹配
+    if (/^(编号|序号|no|sn)$/i.test(h) && a !== h && a.includes(h) && a.length > h.length) return 0;
     if (h.length >= 2 && a.length >= 2 && (h.includes(a) || a.includes(h))) {
       const ratio = Math.min(h.length, a.length) / Math.max(h.length, a.length);
       return 0.78 + ratio * 0.17;
@@ -233,7 +235,10 @@
     const pieces = [];
     for (let offset = 0; offset < span; offset += 1) {
       const value = text((rows[rowIndex + offset] || [])[colIndex]);
-      if (value && !pieces.includes(value)) pieces.push(value);
+      if (!value || pieces.includes(value)) continue;
+      // 跳过标题/申请信息等长文本，避免与真实表头拼在一起误匹配
+      if (value.length > 20 || /申请部门|投产数量|筛选要求|物料采购|领用部门/.test(value)) continue;
+      pieces.push(value);
     }
     return pieces.join(" / ");
   }
@@ -540,16 +545,26 @@
     return row;
   }
 
+  function isCategoryMarkerRow(row) {
+    const identity = text(row.model || row.description || row.partNumber || row.drawingNo || row.assemblyName);
+    if (!identity || text(row.quantityRaw)) return false;
+    if (/^(电阻|电容|电感|磁珠|晶振|连接器|接插件|集成电路|ic|二极管|三极管|二三极管|印制板|结构件|线缆|紧固件|其他|其它|阻容)(类|组)?$/i.test(identity)) return true;
+    return /^[\u4e00-\u9fffA-Za-z]{1,12}$/.test(identity) && !/\d/.test(identity);
+  }
+
   function extractRows(sheetAnalysis, mapping, multiplier, options) {
     const mappingCheck = validateMapping(mapping);
-    if (!mappingCheck.valid) return { rows: [], mappingCheck, truncated: false, skippedBlankRows: 0 };
+    if (!mappingCheck.valid) return { rows: [], mappingCheck, truncated: false, skippedBlankRows: 0, skippedCategoryRows: 0 };
     const numericMultiplier = Number(multiplier);
     if (!Number.isFinite(numericMultiplier) || numericMultiplier <= 0) {
-      return { rows: [], mappingCheck: { valid: false, issues: [{ level: "error", message: "生产数量必须是大于 0 的数字" }] }, truncated: false, skippedBlankRows: 0 };
+      return { rows: [], mappingCheck: { valid: false, issues: [{ level: "error", message: "生产数量必须是大于 0 的数字" }] }, truncated: false, skippedBlankRows: 0, skippedCategoryRows: 0 };
     }
     const fallbackVariant = options && options.fallbackVariant ? String(options.fallbackVariant) : "";
+    const carryCategory = Boolean(options && options.carryCategory);
     const rows = [];
     let skippedBlankRows = 0;
+    let skippedCategoryRows = 0;
+    let currentCategory = "";
     const sourceRows = sheetAnalysis.rows.slice(sheetAnalysis.dataStartIndex, sheetAnalysis.dataStartIndex + MAX_ROWS);
     sourceRows.forEach((rawRow, offset) => {
       const hasData = mapping.some((field, colIndex) => field && text(rawRow[colIndex]));
@@ -557,13 +572,23 @@
         skippedBlankRows += 1;
         return;
       }
-      rows.push(buildNormalizedRow(rawRow, sheetAnalysis.dataStartIndex + offset + 1, sheetAnalysis.name, mapping, numericMultiplier, fallbackVariant));
+      const row = buildNormalizedRow(rawRow, sheetAnalysis.dataStartIndex + offset + 1, sheetAnalysis.name, mapping, numericMultiplier, fallbackVariant);
+      if (carryCategory && isCategoryMarkerRow(row)) {
+        currentCategory = text(row.model || row.description || row.partNumber);
+        skippedCategoryRows += 1;
+        return;
+      }
+      if (carryCategory && currentCategory && !text(row.category)) row.category = currentCategory;
+      if (!text(row.model) && text(row.description) && /[A-Za-z0-9]/.test(row.description)) row.model = row.description;
+      if (!text(row.description) && text(row.model)) row.description = row.model;
+      rows.push(row);
     });
     return {
       rows,
       mappingCheck,
       truncated: sheetAnalysis.rows.length - sheetAnalysis.dataStartIndex > MAX_ROWS,
-      skippedBlankRows
+      skippedBlankRows,
+      skippedCategoryRows
     };
   }
 
@@ -785,12 +810,14 @@
 
   function resistorCapacitorType(row) {
     const descriptive = normalizeText([row.category, row.description, row.assemblyName].filter(Boolean).join(" "));
-    const model = text(row.model).toLowerCase();
+    const model = text(row.model || row.description).toLowerCase();
     const designators = text(row.designator).split(/[，,;；\s/]+/).filter(Boolean);
     if (/电阻|排阻|可调电阻|resistor|res\b/i.test(descriptive) || model.includes("ω") || /(?:ohm|Ω)/i.test(model)) return "电阻";
     if (/电容|钽电容|capacitor|cap\b/i.test(descriptive) || /(?:^|[^a-z])\d+(?:\.\d+)?\s*(?:pf|nf|uf|μf|µf|mf)(?:[^a-z]|$)/i.test(model)) return "电容";
     if (designators.some((item) => /^R\d/i.test(item))) return "电阻";
     if (designators.some((item) => /^C\d/i.test(item))) return "电容";
+    if (/^(?:rc|rs)[-_]?\d/i.test(model) || /^r\d{2,}/i.test(model)) return "电阻";
+    if (/^(?:0201|0402|0603|0805|1206|1210|1812)[a-z]/i.test(model)) return "电容";
     if (descriptive.includes("阻容")) return "阻容";
     return "";
   }
@@ -804,14 +831,17 @@
 
   function buildOutputs(rows, options) {
     const validRows = options.skipInvalid === false ? rows : rows.filter((row) => !row.errors.length);
+    const mode = options.mode || "bom";
+    const purchaseMode = mode === "procurement" ? "all" : (options.purchaseMode || "auto");
     const withPurchase = validRows.map((row) => {
-      const decision = purchaseDecision(row, options.purchaseMode || "auto");
+      const decision = purchaseDecision(row, purchaseMode);
       return { ...row, purchased: decision.purchased, purchaseBasis: decision.basis };
     });
     const purchasedRows = withPurchase.filter((row) => row.purchased);
     const subcontractMultiplier = Number(options.multiplier || 1);
-    // 外协阻容 = 采购清单中的电阻/电容（与外购判定一致），再按生产数量计算
-    const subcontractSource = purchasedRows
+    // 外协阻容：采购导入模式直接筛阻容；BOM/装配模式从外购物料中筛阻容
+    const subcontractBase = mode === "procurement" ? withPurchase : purchasedRows;
+    const subcontractSource = subcontractBase
       .filter((row) => !isPrintedBoard(row))
       .map((row) => ({ ...row, componentType: resistorCapacitorType(row) }))
       .filter((row) => row.componentType)
@@ -911,7 +941,7 @@
       [title],
       ["项目工号", meta.projectCode || "", "产品型号", meta.productModel || "", "项目名称", meta.projectName || ""],
       ["批次", meta.batch || "", "生产数量", Number(meta.multiplier || 1), "使用部门", meta.department || ""],
-      ["生成时间", meta.generatedAt || "", "数据来源", meta.sourceFile || "", "处理模式", meta.mode === "assembly" ? "装配清单导入" : "AD / BOM 导入"],
+      ["生成时间", meta.generatedAt || "", "数据来源", meta.sourceFile || "", "处理模式", meta.mode === "assembly" ? "装配清单导入" : meta.mode === "procurement" ? "采购清单导入" : "AD / BOM 导入"],
       [],
       columns.map(([label]) => label),
       ...rows.map((row, index) => columns.map(([, key]) => key === "_index" ? index + 1 : (row[key] ?? "")))
@@ -960,8 +990,8 @@
       [],
       ["外购判断规则"],
       ["自动判断", "来源/类别明确写有自制时排除；写有外购、采购、标准件等关键词或存在厂家时视为外购；无属性时为避免漏采，默认按外购处理。"],
-      ["数量计算", metadata.mode === "assembly"
-        ? `装配文件的领料、明细和外购汇总保持原数量；仅外协备料清单 = 原数量 × 生产数量（${metadata.multiplier || 1}）`
+      ["数量计算", metadata.mode === "assembly" || metadata.mode === "procurement"
+        ? `导入清单保持原单机数量；外协备料清单 = 单机数量 × 生产数量（${metadata.multiplier || 1}）`
         : `AD / BOM 清单数量 = 原表数量 × 生产数量（${metadata.multiplier || 1}）；外协备料清单不会重复相乘`],
       ["隐私", "本文件由本地浏览器生成，源料单未上传。"]
     ];
@@ -1199,6 +1229,7 @@
   function buildWorkbook(rows, metadata, options) {
     const outputs = buildOutputs(rows, {
       ...options,
+      mode: metadata.mode || options.mode || "bom",
       multiplier: Number(metadata.multiplier || 1),
       pcbRevision: metadata.pcbRevision,
       pcbVendor: metadata.pcbVendor,
@@ -1254,6 +1285,8 @@
     pcbRevisionFromFilename,
     printedBoardRevisions,
     withPrintedBoard,
+    isCategoryMarkerRow,
+    resistorCapacitorType,
     buildOutputs,
     inspectTemplate,
     makeTemplateSheet,

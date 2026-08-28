@@ -158,7 +158,14 @@
   }
 
   function effectiveImportMultiplier() {
-    return state.mode === "assembly" ? 1 : Number($("#multiplier").value || 1);
+    return state.mode === "assembly" || state.mode === "procurement" ? 1 : Number($("#multiplier").value || 1);
+  }
+
+  function extractOptions() {
+    return {
+      fallbackVariant: effectiveFallbackVariant(),
+      carryCategory: state.mode === "procurement"
+    };
   }
 
   function recalculateDocumentQuantities() {
@@ -202,8 +209,10 @@
     container.innerHTML = `${primary.length ? `<div class="output-group-title">常用清单 · 默认勾选</div>${primary.map(renderOption).join("")}` : ""}
       ${secondary.length ? `<details class="other-outputs"><summary>其他报表（${secondary.length} 类）</summary><div class="other-output-list">${secondary.map(renderOption).join("")}</div></details>` : ""}`;
     $("#modeExportHint").textContent = state.mode === "bom"
-      ? "默认生成装配、采购；外协阻容从表中采购清单的电阻电容导出"
-      : "默认生成外协阻容备料清单（外购阻容 × 生产数量）";
+      ? "默认生成装配、采购和外协阻容三类常用清单"
+      : state.mode === "procurement"
+        ? "导入采购清单后，默认仅生成外协阻容备料清单"
+        : "默认生成外协阻容备料清单；仅外协阻容数量放大";
     $("#toggleAllOutputs").textContent = available.length && available.every((key) => state.selectedOutputs.has(key)) ? "取消全选" : "全选";
     container.querySelectorAll("input").forEach((input) => input.addEventListener("change", () => {
       if (input.classList.contains("template-input")) return;
@@ -479,7 +488,7 @@
 
   function processRows() {
     if (!state.sheet) return;
-    const result = BOMCore.extractRows(state.sheet, state.mapping, effectiveImportMultiplier(), { fallbackVariant: effectiveFallbackVariant() });
+    const result = BOMCore.extractRows(state.sheet, state.mapping, effectiveImportMultiplier(), extractOptions());
     state.rows = result.rows.map((row) => ({ ...row, sourceFile: state.file ? state.file.name : "" }));
     state.mappingCheck = result.mappingCheck;
     state.truncated = result.truncated;
@@ -586,7 +595,8 @@
     const outputs = BOMCore.buildOutputs(rows, {
       skipInvalid: $("#skipInvalid").checked,
       purchaseMode: $("#purchaseMode").value,
-      multiplier: Number($("#multiplier").value || 1)
+      multiplier: Number($("#multiplier").value || 1),
+      mode: state.mode
     });
     availableOutputKeys().forEach((key) => {
       const element = $(`[data-output-count="${key}"]`);
@@ -698,7 +708,7 @@
     const baseSheet = analysis.sheets.find((sheet) => sheet.index === analysis.bestSheetIndex) || analysis.sheets[0];
     const sheet = baseSheet.recognized ? baseSheet : BOMCore.reanalyzeWithHeader(baseSheet, 0, 1);
     const mapping = sheet.suggestions.map((suggestion) => suggestion.field || "");
-    const extracted = BOMCore.extractRows(sheet, mapping, effectiveImportMultiplier(), { fallbackVariant: effectiveFallbackVariant() });
+    const extracted = BOMCore.extractRows(sheet, mapping, effectiveImportMultiplier(), extractOptions());
     return {
       id: `bom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       file,
@@ -1071,7 +1081,7 @@
         }
       }
       if (needRecalc) {
-        const effectiveMult = state.mode === "assembly" ? 1 : Number($("#multiplier").value || 1);
+        const effectiveMult = state.mode === "assembly" || state.mode === "procurement" ? 1 : Number($("#multiplier").value || 1);
         const fallback = effectiveFallbackVariant();
         captureActiveDocument();
         state.documents.forEach((documentItem) => {

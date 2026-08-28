@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.33 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.34 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -44,6 +44,11 @@
         <button class="mode-card" data-mode="assembly" type="button">
           <span class="mode-icon alternate">装</span>
           <span><strong>导入装配清单</strong><small>常规清单保持原数量；阻容外协备料按生产数量计算</small></span>
+          <span class="check">✓</span>
+        </button>
+        <button class="mode-card" data-mode="procurement" type="button">
+          <span class="mode-icon alternate">采</span>
+          <span><strong>导入采购清单</strong><small>从采购表筛选电阻电容，生成外协阻容备料单</small></span>
           <span class="check">✓</span>
         </button>
       </section>
@@ -193,7 +198,7 @@
     <div class="dialog-card">
       <div class="dialog-heading"><div><span class="eyebrow">QUICK GUIDE</span><h2>三步完成一份料单</h2></div><button id="closeHelp" type="button" aria-label="关闭">×</button></div>
       <ol class="help-steps">
-        <li><span>1</span><div><strong>直接导入一个或多个原文件</strong><p>无需删标题、改列名或调整列顺序。程序会逐个扫描工作表；可在文件条中切换校对每个 BOM。</p></div></li>
+        <li><span>1</span><div><strong>直接导入一个或多个原文件</strong><p>可选择「导入 AD / BOM」「导入装配清单」或「导入采购清单」。采购清单模式会自动识别分类行并筛选阻容，用于生成外协阻容备料单。</p></div></li>
         <li><span>2</span><div><strong>确认黄色项目</strong><p>字段映射和异常行都有明确原因。出现乱码时，在“读取编码”中选择 GBK / GB18030 后重读；映射不准确时可用下拉框改正。</p></div></li>
         <li><span>3</span><div><strong>选择批量方式、模板并生成</strong><p>装配、领料、采购、外协阻容四类常用清单默认勾选，并可分别指定模板；其他报表可展开选择。外协阻容从采购清单中的电阻电容导出，并按生产数量计算。</p></div></li>
       </ol>
@@ -205,9 +210,16 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.34 网页版</strong><time>2026-08-28</time></div>
+        <ul>
+          <li>新增「导入采购清单」模式：直接导入公司采购申请表，自动跳过电阻/电容分类行，筛选阻容后生成外协阻容备料单（单机数量 × 页面生产数量）。</li>
+          <li>增强采购表表头识别（名称、型号 / 单机数量 / 生产厂家 / 代号），并避免「编号」误识别为物料编码。</li>
+        </ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.33 网页版</strong><time>2026-08-28</time></div>
         <ul>
-          <li>「外协阻容备料清单」改为从采购清单中的电阻、电容导出：与外购判定一致，自制阻容不会进入外协表；勾选后按生产数量生成公司外协阻容备料表。</li>
+          <li>「外协阻容备料清单」在 BOM / 装配模式下改为从外购物料中筛选电阻、电容（自制阻容不进入）。</li>
         </ul>
       </section>
       <section class="release">

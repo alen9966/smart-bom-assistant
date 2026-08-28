@@ -758,6 +758,7 @@
   async function buildFiles(rows, metadata, options, core, XLSX) {
     const outputs = core.buildOutputs(rows, {
       ...options,
+      mode: metadata.mode || options.mode || "bom",
       multiplier: Number(metadata.multiplier || 1),
       pcbRevision: metadata.pcbRevision,
       pcbVendor: metadata.pcbVendor,

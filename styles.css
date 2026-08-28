@@ -126,7 +126,7 @@ main { width: min(1480px, calc(100% - clamp(28px, 6vw, 90px))); margin: 0 auto 8
 .progress-steps li.active > span { background: var(--green); color: #fff; border-color: var(--green); box-shadow: 0 6px 14px rgba(23, 108, 82, .18); }
 .progress-steps li.done > span { background: var(--green-soft); border-color: #a5d0bc; }
 
-.mode-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+.mode-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
 .mode-card {
   border: 1px solid var(--line);
   background: rgba(255, 254, 250, .75);
