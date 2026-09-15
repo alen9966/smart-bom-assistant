@@ -119,6 +119,18 @@ assert.equal(bomOutputsWithSubcontract.subcontract.find((row) => row.partNumber 
 assert.ok(bomOutputsWithSubcontract.procurement.some((row) => row.partNumber === "R-001"), "外购电阻应进入采购清单");
 assert.ok(bomOutputsWithSubcontract.subcontract.every((row) => bomOutputsWithSubcontract.procurement.some((item) => item.partNumber === row.partNumber || item.model === row.model)), "BOM 模式下外协阻容应来自外购物料");
 
+const duplicateRows = [
+  { ...extracted.rows[0], quantityRaw: "56", baseQuantity: 56, quantity: 336, sourceRow: 10 },
+  { ...extracted.rows[0], quantityRaw: "1", baseQuantity: 1, quantity: 6, sourceRow: 11 }
+];
+const duplicateOutputs = Core.buildOutputs(duplicateRows, { skipInvalid: true, purchaseMode: "auto", multiplier: 6 });
+const duplicateProcurement = duplicateOutputs.procurement.find((row) => row.partNumber === "R-001");
+assert.equal(duplicateProcurement.baseQuantity, 57, "采购汇总后的单机数量应累加所有相同物料行");
+assert.equal(duplicateProcurement.quantity, 342, "采购汇总总数量应等于汇总单机数量乘生产数量");
+const duplicateSubcontract = duplicateOutputs.subcontract.find((row) => row.partNumber === "R-001");
+assert.equal(duplicateSubcontract.baseQuantity, 57, "外协汇总后的单机数量应与总数量一致");
+assert.equal(duplicateSubcontract.quantity, 342, "外协汇总总数量应等于汇总单机数量乘生产数量");
+
 const selfMadeResistor = {
   ...extracted.rows[0],
   partNumber: "R-SELF",

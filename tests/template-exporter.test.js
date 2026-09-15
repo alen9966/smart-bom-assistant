@@ -166,6 +166,26 @@ async function run() {
       assert.match(workbookXml, /_xlnm\.Print_Titles/i);
     }
   }
+
+  const duplicateRows = [
+    { ...rows[0], quantityRaw: "56", baseQuantity: 56, quantity: 336, sourceRow: 10 },
+    { ...rows[0], quantityRaw: "1", baseQuantity: 1, quantity: 6, sourceRow: 11 }
+  ];
+  const duplicateResult = await Exporter.buildFiles(
+    duplicateRows,
+    { ...metadata, multiplier: 6 },
+    { selectedOutputs: ["procurement", "subcontract"], skipInvalid: true, purchaseMode: "auto", templates },
+    Core,
+    XLSX
+  );
+  for (const file of duplicateResult.files) {
+    const definition = Definitions[file.key];
+    const duplicateBook = XLSX.read(Buffer.from(file.bytes), { type: "buffer" });
+    const duplicateSheet = duplicateBook.Sheets[definition.inspection.sheetName];
+    assert.equal(duplicateSheet.F5.v, 57, `${file.key} 合并相同物料后单机数量应为 56+1`);
+    assert.equal(duplicateSheet.J5.v, 342, `${file.key} 合并相同物料后装机总数应为 57×6`);
+    assert.equal(duplicateSheet.K5.v, 342, `${file.key} 合并相同物料后采购总数应为 57×6`);
+  }
   console.log("exact template preservation and Excel compatibility tests passed");
 }
 

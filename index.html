@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.34 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.35 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -210,6 +210,13 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.35 网页版</strong><time>2026-09-15</time></div>
+        <ul>
+          <li>修复采购清单和外协阻容备料清单合并相同物料时，单机数量只显示第一行、总数量却包含多行的问题。</li>
+          <li>单机数量、装机总数和采购总数现在保持一致，均按合并后的物料数量计算。</li>
+        </ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.34 网页版</strong><time>2026-08-28</time></div>
         <ul>
           <li>新增「导入采购清单」模式：直接导入公司采购申请表，自动跳过电阻/电容分类行，筛选阻容后生成外协阻容备料单（单机数量 × 页面生产数量）。</li>

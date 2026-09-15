@@ -657,6 +657,7 @@
       if (!groups.has(key)) {
         groups.set(key, {
           ...row,
+          baseQuantity: 0,
           quantity: 0,
           designators: [],
           sourceRows: [],
@@ -665,6 +666,9 @@
         });
       }
       const group = groups.get(key);
+      // 汇总同一物料时，单机数量也必须与总数量同步累加。
+      // 否则采购/外协模板会出现“单机数量显示第一行、总数量却包含多行”的不一致。
+      group.baseQuantity = Number(group.baseQuantity || 0) + baseQuantityOf(row);
       group.quantity += Number(row.quantity || 0);
       group.designators.push(row.designator);
       group.sourceRows.push(`${row.sourceFile ? `${row.sourceFile} / ` : ""}${row.sourceSheet}!${row.sourceRow}`);
