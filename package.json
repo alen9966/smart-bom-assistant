@@ -1,6 +1,6 @@
 {
   "name": "smart-bom-assistant",
-  "version": "1.35.0",
+  "version": "1.36.0",
   "main": "desktop/main.js",
   "private": true,
   "description": "离线智能料单助手：自动识别非标准 BOM 表头并生成装配、领料、采购与明细清单",

@@ -14,6 +14,8 @@ const configs = {
       dataStartIndex: 5,
       dataEndIndex: 122,
       dataMaxCol: 8,
+      // 后续空行的部分单元格没有显式样式，全部数据行沿用完整的第 6 行。
+      rowStyleRows: { item: 6 },
       sheetPath: "xl/worksheets/sheet1.xml",
       openView: "normal",
       printAreaMaxCol: "I",

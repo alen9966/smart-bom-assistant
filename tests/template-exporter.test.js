@@ -186,6 +186,30 @@ async function run() {
     assert.equal(duplicateSheet.J5.v, 342, `${file.key} 合并相同物料后装机总数应为 57×6`);
     assert.equal(duplicateSheet.K5.v, 342, `${file.key} 合并相同物料后采购总数应为 57×6`);
   }
+  // Cover the partially styled tail of the template and rows beyond its capacity.
+  const longRows = Array.from({ length: 160 }, (_, index) => ({
+    ...rows[index % rows.length],
+    sourceRow: index + 2,
+    designator: `R${index + 1}`,
+    remark: index === 159 ? "末行备注" : ""
+  }));
+  const longBytes = await Exporter.fillTemplate(Definitions.assembly, longRows, metadata);
+  const longXml = await zipText(longBytes, Definitions.assembly.inspection.sheetPath);
+  const longStyles = await zipText(longBytes, "xl/styles.xml");
+  const longBook = XLSX.read(Buffer.from(longBytes), { type: "buffer", cellStyles: true });
+  const longSheet = longBook.Sheets[Definitions.assembly.inspection.sheetName];
+  for (let row = 6; row <= 165; row += 1) {
+    for (const col of "ABCDEFGHI") {
+      assert.equal(styleId(longXml, `${col}${row}`), styleId(longXml, `${col}6`),
+        `装配长清单 ${col}${row} 应沿用首条数据行的边框、字体及对齐样式`);
+      assert.match(styleAlignment(longStyles, styleId(longXml, `${col}${row}`)), /wrapText=["']1["']/,
+        `${col}${row} 应支持自动换行`);
+    }
+    assert.equal(longSheet[`F${row}`].f, `E${row}*$G$3`, "扩展行公式应引用本行单机数量");
+    assert.equal(longSheet[`F${row}`].v, longRows[row - 6].quantity);
+  }
+  assert.equal(longSheet.I165.v, "末行备注");
+  assert.match(await zipText(longBytes, "xl/workbook.xml"), /_xlnm\.Print_Area[\s\S]*?\$I\$165/);
   console.log("exact template preservation and Excel compatibility tests passed");
 }
 
