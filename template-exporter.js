@@ -105,11 +105,9 @@
   function metadataText(template, metadata) {
     const productModel = String(metadata.productModel || "").trim();
     const boardNo = String(metadata.boardNo || metadata.pcbRevision || "").trim();
-    const productModelBoard = productModel && boardNo ? `${productModel}/${boardNo}` : (productModel || boardNo || "");
     return String(template || "")
       .replace(/\{\{使用部门\}\}/g, metadata.department || "")
       .replace(/\{\{项目工号\}\}/g, metadata.projectCode || "")
-      .replace(/\{\{产品型号板号\}\}/g, productModelBoard)
       .replace(/\{\{产品型号\}\}/g, productModel)
       .replace(/\{\{板号\}\}/g, boardNo)
       .replace(/\{\{PCB版号\}\}/g, boardNo)

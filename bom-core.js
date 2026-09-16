@@ -1106,7 +1106,6 @@
       "项目工号": metadata.projectCode || "",
       "产品型号": metadata.productModel || "",
       "板号": metadata.boardNo || metadata.pcbRevision || "",
-      "产品型号/板号": [metadata.productModel, metadata.boardNo || metadata.pcbRevision].map((value) => text(value)).filter(Boolean).join("/") || text(metadata.productModel) || text(metadata.boardNo || metadata.pcbRevision),
       "项目名称": metadata.projectName || "",
       "批次": metadata.batch || "",
       "生产数量": Number(metadata.multiplier || 1),

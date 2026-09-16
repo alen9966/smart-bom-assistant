@@ -316,14 +316,14 @@
     const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
     const unnamed = state.documents.filter((item) => !documentPcbRevision(item)).length;
     if (!state.documents.length) {
-      hint.textContent = "板号会写入装配清单表头「产品型号/板号」；填写板厂后采购清单也会用板号追加印制板。上传 BOM 后也可从文件名自动识别。";
+      hint.textContent = "板号会写入装配清单表头；填写板厂后采购清单也会用板号追加印制板。上传 BOM 后也可从文件名自动识别。";
       return;
     }
     if (revisions.length) {
       hint.textContent = `已从文件名识别 ${revisions.length} 个板号：${revisions.join("、")}${unnamed ? `；另有 ${unnamed} 个文件未能识别，可在上方补填` : "。分别生成时装配表头各用本文件板号；采购印制板合并时每个板号一行。"}`;
       return;
     }
-    hint.textContent = "当前文件名未能识别板号，可手动填写；装配表头会显示「产品型号/板号」，填了板厂后才会追加印制板。";
+    hint.textContent = "当前文件名未能识别板号，可手动填写；装配表头只显示板号，填了板厂后才会追加印制板。";
   }
 
   function renderBomFileList() {
