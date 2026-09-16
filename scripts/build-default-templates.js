@@ -20,7 +20,7 @@ const configs = {
       openView: "normal",
       printAreaMaxCol: "I",
       fitToPageWidth: true,
-      metadataCells: { C1: "{{产品型号}}", C2: "{{生成时间}}", G2: "{{装配变量}}", C3: "{{项目工号}} / {{项目名称}}", G3: "{{生产数量}}" },
+      metadataCells: { A1: "产品型号/板号", C1: "{{产品型号板号}}", C2: "{{生成时间}}", G2: "{{装配变量}}", C3: "{{项目工号}} / {{项目名称}}", G3: "{{生产数量}}" },
       quantityFormula: { baseColIndex: 4, multiplierCell: "G3" },
       matches: [
         [0, "_index"], [1, "description"], [2, "model"], [3, "designator"],

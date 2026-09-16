@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.36 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.37 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -141,14 +141,14 @@
             <div class="form-grid">
               <label><span>项目工号</span><input id="projectCode" autocomplete="off" placeholder="例如 ZCJY260704"></label>
               <label><span>产品型号</span><input id="productModel" autocomplete="off" placeholder="例如 共视接收机"></label>
+              <label><span>板号</span><input id="pcbRevision" autocomplete="off" placeholder="例如 ZC7.820.0155-V3"></label>
               <label class="wide"><span>项目名称</span><input id="projectName" autocomplete="off" placeholder="例如 整机采购"></label>
               <label><span>批次</span><input id="batch" autocomplete="off" placeholder="例如 2601"></label>
               <label><span>生产数量</span><input id="multiplier" type="number" min="0.0001" step="any" value="1"></label>
               <label class="wide"><span>装配变量（如原始 BOM 没有此列，可在此手动填写；未填写时按“整机采购”处理）</span><input id="variant" autocomplete="off" placeholder="例如 整机采购 / 控制板A / 主控板B"></label>
               <label class="wide"><span>使用部门</span><input id="department" autocomplete="off" placeholder="例如 设备与系统"></label>
-              <label><span>PCB板厂</span><input id="pcbVendor" autocomplete="off" placeholder="例如 嘉立创"></label>
-              <label><span>PCB版号（可空）</span><input id="pcbRevision" autocomplete="off" placeholder="可空，优先从文件名识别"></label>
-              <p class="field-hint" id="pcbRevisionHint">上传 BOM 后自动从文件名识别版号，一般只需填写板厂。</p>
+              <label class="wide"><span>PCB板厂</span><input id="pcbVendor" autocomplete="off" placeholder="例如 嘉立创"></label>
+              <p class="field-hint" id="pcbRevisionHint">板号会写入装配清单表头「产品型号/板号」；填写板厂后，采购清单也会用板号追加印制板。上传 BOM 后也可从文件名自动识别。</p>
             </div>
 
             <div class="divider"></div>
@@ -210,6 +210,13 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.37 网页版</strong><time>2026-09-16</time></div>
+        <ul>
+          <li>装配清单表头「产品型号」改为「产品型号/板号」：在网页「板号」栏填写后，导出显示为「产品型号/板号」；未填板号时仍只显示产品型号。</li>
+          <li>「板号」与采购印制板版号共用同一输入；分别生成多个 BOM 时，若页面未填板号，装配表头会优先使用各文件名识别到的板号。</li>
+        </ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.36 网页版</strong><time>2026-09-16</time></div>
         <ul>
           <li>修复装配清单较长时后半段部分单元格边框、字体及对齐不一致的问题。</li>

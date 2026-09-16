@@ -81,6 +81,8 @@ async function run() {
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const outputXml = await zipText(file.bytes, definition.inspection.sheetPath);
     if (file.key === "assembly") {
+      assert.equal(sheet.A1.v, "产品型号/板号", "装配清单表头标签应为产品型号/板号");
+      assert.equal(String(sheet.C1.v), "共视接收机/ZC7.820.0155-V3", "装配清单产品型号栏应显示产品型号/板号");
       assert.equal(String(sheet.B6.v).replace(/\n/g, ""), "共视接收机主板精密贴片电阻阻值二十二欧姆耐压五十伏封装零四零二", "长名称必须完整写入");
       assert.match(String(sheet.B6.v), /\n/, "长名称应按列宽软换行，避免单行裁切");
       assert.equal(String(sheet.C6.v).replace(/\n/g, ""), "RC02W22R0FT0402B104K500NTEXTRA1234567890ABCDEF", "长型号必须完整写入");

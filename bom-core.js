@@ -1105,6 +1105,8 @@
     const fields = {
       "项目工号": metadata.projectCode || "",
       "产品型号": metadata.productModel || "",
+      "板号": metadata.boardNo || metadata.pcbRevision || "",
+      "产品型号/板号": [metadata.productModel, metadata.boardNo || metadata.pcbRevision].map((value) => text(value)).filter(Boolean).join("/") || text(metadata.productModel) || text(metadata.boardNo || metadata.pcbRevision),
       "项目名称": metadata.projectName || "",
       "批次": metadata.batch || "",
       "生产数量": Number(metadata.multiplier || 1),
@@ -1114,7 +1116,7 @@
       "生成时间": metadata.generatedAt || ""
     };
     const placeholders = {
-      "项目工号": "projectCode", "产品型号": "productModel", "项目名称": "projectName", "批次": "batch",
+      "项目工号": "projectCode", "产品型号": "productModel", "板号": "pcbRevision", "项目名称": "projectName", "批次": "batch",
       "生产数量": "multiplier", "使用部门": "department", "装配变量": "variant", "源文件": "sourceFile", "生成时间": "generatedAt"
     };
     for (let row = range.s.r; row <= Math.min(range.e.r, 120); row += 1) {

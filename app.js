@@ -142,6 +142,7 @@
     result.multiplier = Number($("#multiplier").value || 1);
     result.mode = state.mode;
     result.sourceFile = state.file ? state.file.name : "";
+    result.boardNo = result.pcbRevision || "";
     const all = rowsForAllDocuments();
     const manualVariant = String($("#variant").value || "").trim();
     if (manualVariant) {
@@ -315,14 +316,14 @@
     const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
     const unnamed = state.documents.filter((item) => !documentPcbRevision(item)).length;
     if (!state.documents.length) {
-      hint.textContent = "上传 BOM 后自动从文件名识别版号，一般只需填写板厂。";
+      hint.textContent = "板号会写入装配清单表头「产品型号/板号」；填写板厂后采购清单也会用板号追加印制板。上传 BOM 后也可从文件名自动识别。";
       return;
     }
     if (revisions.length) {
-      hint.textContent = `已从文件名识别 ${revisions.length} 个版号：${revisions.join("、")}${unnamed ? `；另有 ${unnamed} 个文件未能识别，可在上方补填` : "。分别生成时各用本文件版号，合并时每个版号一行。"}`;
+      hint.textContent = `已从文件名识别 ${revisions.length} 个板号：${revisions.join("、")}${unnamed ? `；另有 ${unnamed} 个文件未能识别，可在上方补填` : "。分别生成时装配表头各用本文件板号；采购印制板合并时每个板号一行。"}`;
       return;
     }
-    hint.textContent = "当前文件名未能识别版号，可手动填写；填了板厂后才会追加印制板。";
+    hint.textContent = "当前文件名未能识别板号，可手动填写；装配表头会显示「产品型号/板号」，填了板厂后才会追加印制板。";
   }
 
   function renderBomFileList() {
@@ -982,6 +983,16 @@
       : `已下载 ${count} 个 Excel`;
   }
 
+  function documentMetadata(documentItem, baseMetadata) {
+    const fromFile = documentPcbRevision(documentItem);
+    return {
+      ...baseMetadata,
+      sourceFile: documentItem.file.name,
+      pcbRevision: baseMetadata.pcbRevision || fromFile,
+      boardNo: baseMetadata.pcbRevision || fromFile
+    };
+  }
+
   async function generateBatchWorkbook() {
     try {
       captureActiveDocument();
@@ -998,10 +1009,13 @@
 
       if (state.exportMode === "combined") {
         const combinedRows = state.documents.flatMap((documentItem) => documentItem.rows || []);
+        const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
         const combinedMetadata = {
           ...baseMetadata,
           sourceFile: `${state.documents.length} 个 BOM 合并`,
-          pcbRevisions: [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))]
+          pcbRevision: baseMetadata.pcbRevision || (revisions.length === 1 ? revisions[0] : ""),
+          boardNo: baseMetadata.pcbRevision || (revisions.length === 1 ? revisions[0] : ""),
+          pcbRevisions: revisions
         };
         const result = await buildOutputFiles(combinedRows, combinedMetadata, commonOptions);
         const saved = await downloadOutputFiles(result.files);
@@ -1009,7 +1023,7 @@
         $("#generationNote").textContent = `${completionMessage(result.files.length, saved)}，共 ${combinedRows.length} 行源数据`;
       } else if (state.documents.length === 1) {
         const documentItem = state.documents[0];
-        const result = await buildOutputFiles(documentItem.rows, { ...baseMetadata, sourceFile: documentItem.file.name }, commonOptions);
+        const result = await buildOutputFiles(documentItem.rows, documentMetadata(documentItem, baseMetadata), commonOptions);
         const prefix = safeDownloadPart(documentItem.file.name.replace(/\.[^.]+$/, ""));
         result.files.forEach((file) => { file.filename = `${prefix}_${file.filename}`; });
         const saved = await downloadOutputFiles(result.files);
@@ -1018,7 +1032,7 @@
       } else {
         const outputFiles = [];
         for (const documentItem of state.documents) {
-          const result = await buildOutputFiles(documentItem.rows, { ...baseMetadata, sourceFile: documentItem.file.name }, commonOptions);
+          const result = await buildOutputFiles(documentItem.rows, documentMetadata(documentItem, baseMetadata), commonOptions);
           const prefix = safeDownloadPart(documentItem.file.name.replace(/\.[^.]+$/, ""));
           result.files.forEach((file) => outputFiles.push({ filename: `${prefix}_${file.filename}`, bytes: file.bytes }));
           await new Promise((resolve) => setTimeout(resolve, 0));
