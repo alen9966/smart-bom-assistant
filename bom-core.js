@@ -851,13 +851,18 @@
       .filter((row) => row.componentType)
       .map((row) => ({ ...row, quantity: baseQuantityOf(row) * subcontractMultiplier }));
     const picking = aggregateRows(withPurchase, false);
+    const assembly = aggregateRows(withPurchase, true).map((row) => ({
+      ...row,
+      // 装配模板读取 designator 字段；汇总后应输出全部位号，而不是只保留第一行位号。
+      designator: row.designatorSummary || row.designator
+    }));
     const procurement = withPrintedBoard(aggregateRows(purchasedRows, true), options);
     const purchased = aggregateRows(purchasedRows, true).sort((a, b) => text(a.vendor).localeCompare(text(b.vendor), "zh-CN"));
     const subcontract = aggregateRows(subcontractSource, true).map((row) => ({
       ...row,
       baseQuantity: subcontractMultiplier ? Number(row.quantity || 0) / subcontractMultiplier : Number(row.quantity || 0)
     }));
-    return { source: rows, validRows: withPurchase, assembly: withPurchase, picking, procurement, detail: withPurchase, purchased, subcontract, issues: summarizeIssues(rows) };
+    return { source: rows, validRows: withPurchase, assembly, picking, procurement, detail: withPurchase, purchased, subcontract, issues: summarizeIssues(rows) };
   }
 
   const OUTPUT_COLUMNS = {

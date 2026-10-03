@@ -121,12 +121,20 @@ assert.ok(bomOutputsWithSubcontract.subcontract.every((row) => bomOutputsWithSub
 
 const duplicateRows = [
   { ...extracted.rows[0], quantityRaw: "56", baseQuantity: 56, quantity: 336, sourceRow: 10 },
-  { ...extracted.rows[0], quantityRaw: "1", baseQuantity: 1, quantity: 6, sourceRow: 11 }
+  { ...extracted.rows[0], designator: "R99", quantityRaw: "1", baseQuantity: 1, quantity: 6, sourceRow: 11 }
 ];
 const duplicateOutputs = Core.buildOutputs(duplicateRows, { skipInvalid: true, purchaseMode: "auto", multiplier: 6 });
 const duplicateProcurement = duplicateOutputs.procurement.find((row) => row.partNumber === "R-001");
 assert.equal(duplicateProcurement.baseQuantity, 57, "采购汇总后的单机数量应累加所有相同物料行");
 assert.equal(duplicateProcurement.quantity, 342, "采购汇总总数量应等于汇总单机数量乘生产数量");
+const duplicateAssembly = duplicateOutputs.assembly.find((row) => row.partNumber === "R-001");
+assert.equal(duplicateOutputs.assembly.length, 1, "装配清单中的相同物料应合并为一行");
+assert.equal(duplicateAssembly.baseQuantity, 57, "装配汇总后的单机数量应累加所有相同物料行");
+assert.equal(duplicateAssembly.quantity, 342, "装配汇总总数量应累加所有相同物料行");
+assert.match(duplicateAssembly.designator, /R1/,
+  "装配汇总后应保留第一行位号");
+assert.match(duplicateAssembly.designator, /R99/,
+  "装配汇总后应合并后续重复行的位号");
 const duplicateSubcontract = duplicateOutputs.subcontract.find((row) => row.partNumber === "R-001");
 assert.equal(duplicateSubcontract.baseQuantity, 57, "外协汇总后的单机数量应与总数量一致");
 assert.equal(duplicateSubcontract.quantity, 342, "外协汇总总数量应等于汇总单机数量乘生产数量");
