@@ -718,7 +718,12 @@
         1,
         ...rowContents[index].map((cell) => countDisplayLines(cell.value, columnWidths[cell.colIndex]))
       );
-      const height = Math.max(heightBase.min, Number((lines * heightBase.line * 1.08).toFixed(2)));
+      // Leave extra vertical breathing room for wrapped Chinese names and mixed
+      // Latin/CJK text. Excel/WPS font metrics can otherwise clip the final line.
+      const height = Math.min(409, Math.max(
+        heightBase.min,
+        Number((lines * heightBase.line * 1.18 + 3).toFixed(2))
+      ));
       xml = setRowHeight(xml, dataStartRow + index, height);
     });
 

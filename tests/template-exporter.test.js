@@ -212,6 +212,17 @@ async function run() {
   }
   assert.equal(longSheet.I165.v, "末行备注");
   assert.match(await zipText(longBytes, "xl/workbook.xml"), /_xlnm\.Print_Area[\s\S]*?\$I\$165/);
+
+  const longNameRows = [{
+    ...rows[0],
+    description: "微波双向收发组件高稳定低噪声射频连接器带屏蔽外壳和安装附件",
+    designator: "J1"
+  }];
+  const longNameBytes = await Exporter.fillTemplate(Definitions.assembly, longNameRows, metadata);
+  const longNameBook = XLSX.read(Buffer.from(longNameBytes), { type: "buffer", cellStyles: true });
+  const longNameSheet = longNameBook.Sheets[Definitions.assembly.inspection.sheetName];
+  assert.match(longNameSheet.B6.v, /\n/, "装配清单长名称应按列宽主动换行");
+  assert.ok(Number(longNameSheet["!rows"][5].hpt) >= 70, "装配清单长名称行高应足以显示全部换行内容");
   console.log("exact template preservation and Excel compatibility tests passed");
 }
 

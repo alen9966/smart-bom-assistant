@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.39 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.40 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -210,6 +210,13 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.40 网页版</strong><time>2026-10-09</time></div>
+        <ul>
+          <li>只有名称、型号、封装、料号和厂家等关键字段全部一致时才合并，避免不同容量、阻值或封装被误并。</li>
+          <li>长名称继续自动换行，并增加行高余量，确保Excel和WPS中完整显示。</li>
+        </ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.39 网页版</strong><time>2026-10-03</time></div>
         <ul>
           <li>修复 BOM 中相同物料在装配清单里仍重复显示的问题；现在会合并重复物料并累加数量。</li>

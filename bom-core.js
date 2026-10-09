@@ -639,8 +639,21 @@
   }
 
   function identityKey(row, includeVendor) {
-    const primary = row.partNumber || row.manufacturerPartNumber || row.model || row.description || row.drawingNo || row.assemblyName;
-    return [primary, row.model, row.quality, row.unit, includeVendor ? row.vendor : ""].map(normalizeText).join("|");
+    // Only merge rows whose material-defining fields all agree. A model code in a
+    // source BOM can be stale or reused accidentally; model-only grouping would
+    // otherwise combine different values/packages and silently discard their names.
+    return [
+      row.partNumber,
+      row.manufacturerPartNumber,
+      row.description,
+      row.model,
+      row.footprint,
+      row.drawingNo,
+      row.assemblyName,
+      row.quality,
+      row.unit,
+      includeVendor ? row.vendor : ""
+    ].map(normalizeText).join("|");
   }
 
   function uniqueJoined(values, limit) {

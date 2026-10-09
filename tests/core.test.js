@@ -139,6 +139,16 @@ const duplicateSubcontract = duplicateOutputs.subcontract.find((row) => row.part
 assert.equal(duplicateSubcontract.baseQuantity, 57, "外协汇总后的单机数量应与总数量一致");
 assert.equal(duplicateSubcontract.quantity, 342, "外协汇总总数量应等于汇总单机数量乘生产数量");
 
+const conflictingSpecifications = [
+  { ...extracted.rows[0], description: "1uF/25V", model: "0402X105K250NT", footprint: "0402C", quantityRaw: "2", baseQuantity: 2, quantity: 12, sourceRow: 20 },
+  { ...extracted.rows[0], description: "10uF/25V", model: "0402X105K250NT", footprint: "0402C", quantityRaw: "1", baseQuantity: 1, quantity: 6, sourceRow: 21 },
+  { ...extracted.rows[0], description: "1uF/25V", model: "0805X105K250NT", footprint: "0805C", quantityRaw: "3", baseQuantity: 3, quantity: 18, sourceRow: 22 }
+];
+const conflictingOutputs = Core.buildOutputs(conflictingSpecifications, { skipInvalid: true, purchaseMode: "auto", multiplier: 6 });
+assert.equal(conflictingOutputs.assembly.length, 3, "名称、型号或封装任一不同的物料不得在装配清单中合并");
+assert.equal(conflictingOutputs.procurement.length, 3, "名称、型号或封装任一不同的物料不得在采购清单中合并");
+assert.deepEqual(conflictingOutputs.assembly.map((row) => row.baseQuantity), [2, 1, 3], "不同规格的数量必须各自保留");
+
 const selfMadeResistor = {
   ...extracted.rows[0],
   partNumber: "R-SELF",
