@@ -219,10 +219,12 @@ async function run() {
     designator: "J1"
   }];
   const longNameBytes = await Exporter.fillTemplate(Definitions.assembly, longNameRows, metadata);
+  const longNameXml = await zipText(longNameBytes, Definitions.assembly.inspection.sheetPath);
   const longNameBook = XLSX.read(Buffer.from(longNameBytes), { type: "buffer", cellStyles: true });
   const longNameSheet = longNameBook.Sheets[Definitions.assembly.inspection.sheetName];
+  assert.match(longNameXml, /<col\b[^>]*min=["']2["'][^>]*width=["']18["']/i, "装配清单名称列应加宽，减少英文料号式名称被切成过多短行");
   assert.match(longNameSheet.B6.v, /\n/, "装配清单长名称应按列宽主动换行");
-  assert.ok(Number(longNameSheet["!rows"][5].hpt) >= 70, "装配清单长名称行高应足以显示全部换行内容");
+  assert.ok(Number(longNameSheet["!rows"][5].hpt) >= 85, "装配清单长名称行高应按 WPS 的字体度量保留足够余量");
   console.log("exact template preservation and Excel compatibility tests passed");
 }
 

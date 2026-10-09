@@ -37,13 +37,13 @@ async function patchAssembly() {
   // A序号 B名称 C型号 D位号 E单机 F领料 G厂家 H封装 I备注
   const cols = `<cols>
 <col min="1" max="1" width="4.5" style="3" customWidth="1"/>
-<col min="2" max="2" width="12" style="3" customWidth="1"/>
-<col min="3" max="3" width="14" style="3" customWidth="1"/>
+<col min="2" max="2" width="18" style="3" customWidth="1"/>
+<col min="3" max="3" width="16" style="3" customWidth="1"/>
 <col min="4" max="4" width="18" style="3" customWidth="1"/>
 <col min="5" max="5" width="6.5" style="3" customWidth="1"/>
 <col min="6" max="6" width="6.5" style="4" customWidth="1"/>
 <col min="7" max="7" width="8" style="3" customWidth="1"/>
-<col min="8" max="8" width="7" style="3" customWidth="1"/>
+<col min="8" max="8" width="8" style="3" customWidth="1"/>
 <col min="9" max="9" width="12" style="3" customWidth="1"/>
 </cols>`.replace(/\n/g, "");
   xml = xml.replace(/<cols>[\s\S]*?<\/cols>/i, cols);
