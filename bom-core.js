@@ -925,6 +925,54 @@
     };
   }
 
+  // Column widths are in default-font character units; account for the cell's
+  // actual point size and explicit line breaks before choosing its row height.
+  function wrappedTextLines(value, colWidth, fontSize = 11) {
+    const limit = Math.max(1, Math.floor((Number(colWidth) - 0.7 || 9.3) * 11 / fontSize * 0.92));
+    return String(value ?? "").replace(/\r\n?/g, "\n").split("\n").reduce((total, paragraph) => {
+      let lines = 1;
+      let width = 0;
+      for (const char of paragraph) {
+        const size = /[\u1100-\u115F\u2E80-\u9FFF\uAC00-\uD7AF\uF900-\uFAFF\uFE10-\uFE6F\uFF00-\uFF60]/.test(char) ? 2 : 1;
+        if (width && width + size > limit) { lines += 1; width = 0; }
+        width += size;
+      }
+      return total + lines;
+    }, 0);
+  }
+
+  function contentRowHeight(cells, minHeight = 15.75) {
+    const heights = cells.filter((cell) => cell.value !== "" && cell.value != null).map((cell) => {
+      const fontSize = Number(cell.fontSize) > 0 ? Number(cell.fontSize) : 11;
+      const lines = wrappedTextLines(cell.value, cell.width || 10, fontSize);
+      return lines * (fontSize * 1.25 + 0.75) + (lines > 1 ? 3 : 0);
+    });
+    return Math.min(409, Math.ceil(Math.max(minHeight, ...heights) * 100) / 100);
+  }
+
+  function fitDataRowHeights(sheet, startRow, endRow, maxCol) {
+    sheet["!rows"] = sheet["!rows"] || [];
+    for (let row = startRow; row <= endRow; row += 1) {
+      const cells = [];
+      for (let col = 0; col <= maxCol; col += 1) {
+        const cell = sheet[XLSX.utils.encode_cell({ r: row, c: col })];
+        if (!cell) continue;
+        const merge = (sheet["!merges"] || []).find((item) => row >= item.s.r && row <= item.e.r && col >= item.s.c && col <= item.e.c);
+        if (merge && (row !== merge.s.r || col !== merge.s.c)) continue;
+        let width = 0;
+        for (let c = col; c <= (merge ? merge.e.c : col); c += 1) {
+          const column = (sheet["!cols"] || [])[c] || {};
+          width += column.wch || column.width || (column.wpx ? column.wpx / 7 : 10);
+        }
+        cell.s = { ...cell.s, alignment: { ...cell.s?.alignment, wrapText: true } };
+        cells.push({ value: cell.w ?? cell.v, width, fontSize: cell.s.font?.sz });
+      }
+      const previous = sheet["!rows"][row] || {};
+      const { hpx, ...properties } = previous;
+      sheet["!rows"][row] = { ...properties, hpt: contentRowHeight(cells, Math.min(15.75, previous.hpt || 15.75)) };
+    }
+  }
+
   function applySheetStyle(sheet, columnCount, dataCount, headerRowIndex, numericColumnIndexes) {
     const endCol = XLSX.utils.encode_col(Math.max(0, columnCount - 1));
     sheet["!merges"] = sheet["!merges"] || [];
@@ -976,6 +1024,7 @@
     sheet["!cols"] = widths;
     const numeric = columns.map(([, key], index) => ["quantity", "sourceRow", "_index"].includes(key) ? index : -1).filter((index) => index >= 0);
     applySheetStyle(sheet, columns.length, rows.length, headerRowIndex, numeric);
+    fitDataRowHeights(sheet, headerRowIndex + 1, headerRowIndex + rows.length, columns.length - 1);
     return sheet;
   }
 
@@ -1242,6 +1291,7 @@
       sheet["!autofilter"].ref = XLSX.utils.encode_range(filterRange);
     }
     fillTemplateMetadata(sheet, metadata, inspection.headerRowIndex);
+    fitDataRowHeights(sheet, dataStart, lastWriteRow, originalRange.e.c);
     return sheet;
   }
 
@@ -1313,6 +1363,8 @@
     buildOutputs,
     inspectTemplate,
     makeTemplateSheet,
+    wrappedTextLines,
+    contentRowHeight,
     buildWorkbook
   };
 });

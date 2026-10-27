@@ -10,7 +10,9 @@ const references = [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
 
 assert.ok(references.length > 0, "index.html 应引用本地资源");
 for (const relative of references) {
-  assert.ok(fs.existsSync(path.join(root, relative)), `index.html 引用的文件不存在：${relative}`);
+  assert.ok(fs.existsSync(path.join(root, relative.split(/[?#]/)[0])), `index.html 引用的文件不存在：${relative}`);
+  assert.ok(relative.endsWith(`?v=${require("../package.json").version.replace(/\.0$/, "")}`),
+    `网页资源必须携带当前版本，避免混用缓存：${relative}`);
 }
 assert.match(html, /vendor\/xlsx\.bundle\.js/, "Excel 运行库应从 vendor 目录加载");
 assert.match(html, /vendor\/jszip\.min\.js/, "ZIP 运行库应从 vendor 目录加载");

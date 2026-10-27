@@ -1,7 +1,7 @@
 (function (root, factory) {
-  if (typeof module === "object" && module.exports) module.exports = factory(require("jszip"));
-  else root.TemplateExporter = factory(root.JSZip);
-})(typeof self !== "undefined" ? self : this, function (JSZip) {
+  if (typeof module === "object" && module.exports) module.exports = factory(require("jszip"), require("./bom-core.js"));
+  else root.TemplateExporter = factory(root.JSZip, root.BOMCore);
+})(typeof self !== "undefined" ? self : this, function (JSZip, BOMCore) {
   "use strict";
 
   function xmlEscape(value) {
@@ -393,7 +393,11 @@
     "remark",
     "drawingNo",
     "assemblyName",
-    "vendor"
+    "vendor",
+    "footprint",
+    "partNumber",
+    "manufacturerPartNumber",
+    "traceSummary"
   ]);
 
   const LEFT_ALIGN_KEYS = new Set(["designator", "description", "model", "modelOrDescription"]);
@@ -406,9 +410,9 @@
     return width;
   }
 
-  function wrapMaxWidth(colWidth) {
+  function wrapMaxWidth(colWidth, fontSize = 11) {
     // Slightly tighter than column width so Excel wrap + row height stay ahead of clipping.
-    return Math.max(8, Math.floor(Number(colWidth || 10) * 0.92));
+    return Math.max(1, Math.floor((Number(colWidth || 10) - 0.7) * 11 / fontSize * 0.92));
   }
 
   function hardWrapByWidth(text, maxWidth) {
@@ -470,24 +474,48 @@
     return widths;
   }
 
-  function presentTemplateValue(value, key, colWidth) {
-    if (!WRAP_TEXT_KEYS.has(key) || value == null || typeof value === "number" || isFormulaValue(value)) return value;
-    return softWrapBySeparators(value, wrapMaxWidth(colWidth));
+  function applyColumnWidths(xml, widths) {
+    if (!Array.isArray(widths) || !widths.length) return xml;
+    if (widths.some((width) => !Number.isFinite(width) || width <= 0)) throw new Error("模板列宽必须为正数");
+    const oldCols = (xml.match(/<(?:x:)?cols\b[^>]*>[\s\S]*?<\/(?:x:)?cols>/i) || [""])[0];
+    const records = [...oldCols.matchAll(/<(?:x:)?col\b([^>]*?)\/>/gi)].map((match) => ({
+      attrs: match[1],
+      min: Number((match[1].match(/\bmin=["'](\d+)["']/i) || [])[1]),
+      max: Number((match[1].match(/\bmax=["'](\d+)["']/i) || [])[1])
+    }));
+    const cols = widths.map((width, index) => {
+      const base = records.find((col) => col.min <= index + 1 && col.max >= index + 1);
+      const attrs = (base ? base.attrs : "").replace(/\s+(?:min|max|width|customWidth|bestFit)=["'][^"']*["']/gi, "");
+      return `<col min="${index + 1}" max="${index + 1}"${attrs} width="${width}" customWidth="1"/>`;
+    });
+    // Leave columns outside the configured layout (and their styles) intact.
+    records.filter((col) => col.max > widths.length).forEach((col) => {
+      const attrs = col.attrs.replace(/\s+(?:min|max)=["'][^"']*["']/gi, "");
+      cols.push(`<col min="${Math.max(col.min, widths.length + 1)}" max="${col.max}"${attrs}/>`);
+    });
+    const replacement = `<cols>${cols.join("")}</cols>`;
+    return oldCols ? xml.replace(oldCols, replacement) : xml.replace(/<(?:x:)?sheetData\b/i, `${replacement}<sheetData`);
   }
 
-  function countDisplayLines(value, colWidth) {
-    const text = String(value ?? "");
-    if (!text) return 1;
-    const maxWidth = wrapMaxWidth(colWidth);
-    return text.split(/\n/).reduce((sum, line) => sum + Math.max(1, Math.ceil(visualWidth(line) / maxWidth)), 0);
+  function presentTemplateValue(value, key, colWidth, fontSize) {
+    if (!WRAP_TEXT_KEYS.has(key) || value == null || typeof value === "number" || isFormulaValue(value)) return value;
+    return softWrapBySeparators(value, wrapMaxWidth(colWidth, fontSize));
   }
 
   function rowHeightBaseline(xml, sampleRow) {
     const open = xml.match(new RegExp(`<(?:x:)?row\\b[^>]*\\br=["']${sampleRow}["'][^>]*>`, "i"));
     const ht = open && open[0].match(/\bht=["']([\d.]+)["']/i);
     const value = ht ? Number(ht[1]) : 15.75;
-    if (value >= 24) return { line: value / 2, min: value };
-    return { line: Math.max(14.25, value), min: value };
+    return value;
+  }
+
+  function styleFontSizes(stylesXml) {
+    const fontsBody = (stylesXml.match(/<fonts\b[^>]*>([\s\S]*?)<\/fonts>/i) || [])[1] || "";
+    const fonts = [...fontsBody.matchAll(/<font\b[^>]*>[\s\S]*?<\/font>/gi)].map((match) =>
+      Number((match[0].match(/<sz\b[^>]*\bval=["']([\d.]+)["']/i) || [])[1]) || 11);
+    const body = (stylesXml.match(/<cellXfs\b[^>]*>([\s\S]*?)<\/cellXfs>/i) || [])[1] || "";
+    return [...body.matchAll(/<xf\b[^>]*?(?:\/>|>[\s\S]*?<\/xf>)/gi)].map((match) =>
+      fonts[Number((match[0].match(/\bfontId=["'](\d+)["']/i) || [])[1] || 0)] || 11);
   }
 
   function setRowHeight(xml, row, height) {
@@ -641,8 +669,14 @@
       Object.entries(overrides).forEach(([colIndex, styleId]) => { styles[kind][Number(colIndex)] = String(styleId); });
     });
     xml = extendRows(xml, inspection, rowsForTemplate.length);
+    xml = applyColumnWidths(xml, inspection.columnWidths);
     const columnWidths = parseColumnWidths(xml, dataMaxCol);
-    const heightBase = rowHeightBaseline(xml, inspection.dataStartIndex + 1);
+    // Procurement may start with a tall category row; use the item row as the
+    // compact baseline rather than propagating the category height to items.
+    const heightBase = Math.min(15.75, rowHeightBaseline(xml, styleRows.item || inspection.dataStartIndex + 1));
+    const stylesEntry = zip.file("xl/styles.xml");
+    const sourceStylesXml = stylesEntry ? await stylesEntry.async("string") : "";
+    const fontSizes = styleFontSizes(sourceStylesXml);
 
     Object.entries(inspection.metadataCells || {}).forEach(([address, template]) => {
       xml = setCell(xml, address, metadataText(template, metadata));
@@ -664,13 +698,14 @@
     function writeCell(data, index, match, styleId) {
       if (styleId) usedStyleIds.add(String(styleId));
       const raw = templateValue(data, match.key, index, metadata, valueOptions);
-      const presented = presentTemplateValue(raw, match.key, columnWidths[match.colIndex]);
       const address = `${columnName(match.colIndex)}${dataStartRow + index}`;
+      const fontSize = fontSizes[Number(styleId || cellStyle(xml, address) || 0)] || 11;
+      const presented = presentTemplateValue(raw, match.key, columnWidths[match.colIndex], fontSize);
       xml = setCell(xml, address, presented, styleId);
       if (!data.__category && LEFT_ALIGN_KEYS.has(match.key)) {
         leftAlignCells.push({ address, key: match.key });
       }
-      return presented;
+      return { colIndex: match.colIndex, value: presented, width: columnWidths[match.colIndex], fontSize };
     }
 
     const rowContents = rowsForTemplate.map(() => []);
@@ -679,7 +714,7 @@
         const kind = data.__category ? "category" : "item";
         const styleId = styles[kind] ? styles[kind][match.colIndex] : undefined;
         const presented = writeCell(data, index, match, styleId);
-        rowContents[index].push({ colIndex: match.colIndex, value: presented });
+        rowContents[index].push(presented);
       });
     });
     if (styles.category || styles.item) {
@@ -689,7 +724,7 @@
         for (let colIndex = 0; colIndex <= dataMaxCol; colIndex += 1) {
           const match = inspection.matches.find((item) => item.colIndex === colIndex) || { colIndex, key: "" };
           const presented = writeCell(data, index, match, styles[kind][colIndex]);
-          rowContents[index].push({ colIndex, value: presented });
+          rowContents[index].push(presented);
         }
       });
     }
@@ -714,16 +749,7 @@
         if (styleId) usedStyleIds.add(String(styleId));
       });
       if (data.__category) return;
-      const lines = Math.max(
-        1,
-        ...rowContents[index].map((cell) => countDisplayLines(cell.value, columnWidths[cell.colIndex]))
-      );
-      // Leave extra vertical breathing room for wrapped Chinese names and mixed
-      // Latin/CJK text. Excel/WPS font metrics can otherwise clip the final line.
-      const height = Math.min(409, Math.max(
-        heightBase.min,
-        Number((lines * heightBase.line * 1.5 + 7).toFixed(2))
-      ));
+      const height = BOMCore.contentRowHeight(rowContents[index], heightBase);
       xml = setRowHeight(xml, dataStartRow + index, height);
     });
 
@@ -736,9 +762,8 @@
     if (inspection.fitToPageWidth) xml = ensureFitToPageWidth(xml);
     xml = updateDimension(xml, printLastRow);
 
-    const stylesEntry = zip.file("xl/styles.xml");
     if (stylesEntry && (usedStyleIds.size || leftAlignCells.length)) {
-      let stylesXml = ensureWrapTextStyles(await stylesEntry.async("string"), usedStyleIds);
+      let stylesXml = ensureWrapTextStyles(sourceStylesXml, usedStyleIds);
       const leftBases = new Set();
       leftAlignCells.forEach((cell) => {
         const styleId = cellStyle(xml, cell.address);

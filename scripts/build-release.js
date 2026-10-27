@@ -28,7 +28,8 @@ const releaseFiles = [
 function localReferences(html) {
   return [...html.matchAll(/(?:src|href)=["']([^"']+)["']/g)]
     .map((match) => match[1])
-    .filter((value) => !/^(?:https?:|data:|#)/i.test(value));
+    .filter((value) => !/^(?:https?:|data:|#)/i.test(value))
+    .map((value) => value.split(/[?#]/)[0]);
 }
 
 async function build() {

@@ -91,6 +91,7 @@ async function run() {
       assert.equal(sheet.F6.v, 8);
       assert.equal(sheet.G6.v, "风华");
       assert.equal(sheet.H6.v, "0402R");
+      assert.equal(sheet["!rows"][6].hpt, 15.75, "装配清单短内容也应紧凑，不能沿用模板中过高的正文行高");
       assert.match(String(sheet.D6.v), /R1[\s\S]*R20/, "长位号必须完整写入，不能截断");
       assert.match(outputXml, /<row\b[^>]*r=["']6["'][^>]*ht=["']([3-9]\d|\d{3,})/, "长文本行应自动加高");
       assert.match(outputXml, /<c[^>]*r=["']F6["'][^>]*>[\s\S]*?<f>E6\*\$G\$3<\/f>[\s\S]*?<v>8<\/v>/i, "领料数应为单机数×本次装配数量的公式");
@@ -130,7 +131,7 @@ async function run() {
       assert.match(styleAlignment(await zipText(file.bytes, "xl/styles.xml"), styleId(outputXml, "C5")), /horizontal=["']left["']/i, "采购清单名称型号应左对齐");
       assert.notEqual(styleId(outputXml, "C5"), "6", "采购单物料行不应误用分类行样式");
       assert.match(await zipText(file.bytes, "xl/styles.xml"), /wrapText=["']1["']/, "采购清单样式应启用自动换行");
-      assert.match(outputXml, /<col\b[^>]*min=["']3["'][^>]*width=["']([0-3]?\d(?:\.\d+)?)["']/i, "采购清单名称型号列宽应收窄以适配 A4");
+      assert.match(outputXml, /<col\b[^>]*min=["']3["'][^>]*width=["']32\.75["']/i, "采购清单名称型号列应恢复为参考图的 32.75 字符宽");
       assert.match(outputXml, /fitToWidth=["']1["']/i, "采购清单应按页宽适应打印，避免备注列被裁切");
       assert.match(outputXml, /<col\b[^>]*min=["']13["'][^>]*width=/i, "采购清单应设置备注列宽度");
       assert.match(outputXml, /<row\b[^>]*r=["']50["'][^>]*hidden=["']1["']/i, "采购清单未使用空行应隐藏，避免打印空白页");
@@ -211,6 +212,9 @@ async function run() {
     assert.equal(longSheet[`F${row}`].v, longRows[row - 6].quantity);
   }
   assert.equal(longSheet.I165.v, "末行备注");
+  assert.ok(longSheet["!rows"][163].hpt > longSheet["!rows"][164].hpt,
+    "超出模板容量的末尾行也必须按各自内容调整高度");
+  assert.equal(longSheet["!rows"][164].hpt, 15.75, "长清单末尾的短内容行仍应紧凑");
   assert.match(await zipText(longBytes, "xl/workbook.xml"), /_xlnm\.Print_Area[\s\S]*?\$I\$165/);
 
   const longNameRows = [{
@@ -224,7 +228,78 @@ async function run() {
   const longNameSheet = longNameBook.Sheets[Definitions.assembly.inspection.sheetName];
   assert.match(longNameXml, /<col\b[^>]*min=["']2["'][^>]*width=["']18["']/i, "装配清单名称列应加宽，减少英文料号式名称被切成过多短行");
   assert.match(longNameSheet.B6.v, /\n/, "装配清单长名称应按列宽主动换行");
-  assert.ok(Number(longNameSheet["!rows"][5].hpt) >= 85, "装配清单长名称行高应按 WPS 的字体度量保留足够余量");
+  assert.ok(Number(longNameSheet["!rows"][5].hpt) >= longNameSheet.B6.v.split("\n").length * 12,
+    "长名称的每行应有足够高度，而不是对所有物料套用过大的固定行距");
+
+  const compactRows = [
+    { ...rows[1], model: "0402B104K500NT", designator: "C1", vendor: "风华", remark: "" },
+    { ...rows[1], model: "0603X226M100NT", designator: "C2", vendor: "风华", remark: "第一行\n第二行\n第三行" }
+  ];
+  for (const key of ["procurement", "subcontract"]) {
+    const bytes = await Exporter.fillTemplate(Definitions[key], compactRows, metadata);
+    const book = XLSX.read(Buffer.from(bytes), { type: "buffer", cellStyles: true });
+    const sheet = book.Sheets[Definitions[key].inspection.sheetName];
+    assert.equal(sheet["!cols"][2].width, 32.75, `${key} 名称型号列必须与参考版一致`);
+    assert.equal(sheet["!cols"][6].width, 13.5, `${key} 厂家列必须与参考版一致`);
+    assert.equal(sheet["!rows"][4].hpt, 15.75, `${key} 单行正文应与参考清单一样紧凑，不得沿用分类行高度`);
+    assert.ok(sheet["!rows"][5].hpt >= 50, `${key} 三行备注应单独加高`);
+    const originalSheet = XLSX.read(Buffer.from(Definitions[key].base64, "base64"),
+      { type: "buffer", cellStyles: true }).Sheets[Definitions[key].inspection.sheetName];
+    assert.equal(sheet["!rows"][3].hpt, originalSheet["!rows"][3].hpt, `${key} 分类行应保留模板高度`);
+    assert.equal(sheet.C5.v, compactRows[0].model, "短型号不得无谓换行");
+    assert.equal(sheet.F5.v, 4, "排版变更不得改变单机数量");
+    assert.equal(sheet.K5.v, 16, "排版变更不得改变采购总数");
+    assert.equal(sheet.M6.v, compactRows[1].remark, "已有的手动换行必须保留");
+  }
+
+  // A medium-length connector model must stay on one compact line, while an
+  // actual long connector specification still wraps and increases only its row.
+  const referenceLayoutRows = [
+    { ...rows[1], model: "CONNECTOR-1300K6K2102", remark: "" },
+    { ...rows[1], model: "连接器插座-端子组合".repeat(7), remark: "" }
+  ];
+  for (const key of ["procurement", "subcontract"]) {
+    const bytes = await Exporter.fillTemplate(Definitions[key], referenceLayoutRows, metadata);
+    const sheet = XLSX.read(Buffer.from(bytes), { type: "buffer", cellStyles: true }).Sheets.Sheet1;
+    assert.equal(sheet.C5.v, referenceLayoutRows[0].model, "中等长度型号不得因列窄被拆成两行");
+    assert.equal(sheet["!rows"][4].hpt, 15.75, "中等长度型号也应与短型号一样紧凑");
+    assert.match(sheet.C6.v, /\n/, "真正超长的连接器规格仍须换行");
+    assert.ok(sheet["!rows"][5].hpt > sheet["!rows"][4].hpt, "只为超长规格加高");
+    assert.equal(sheet.F5.v, 4, "列宽调整不得改变数量");
+    assert.equal(sheet.K5.v, 16, "列宽调整不得改变总数");
+  }
+
+  // A custom template may use a larger font with the same row/column sizes.
+  const largeFontZip = await JSZip.loadAsync(Buffer.from(Definitions.procurement.base64, "base64"));
+  let fontIndex = 0;
+  const styles = await largeFontZip.file("xl/styles.xml").async("string");
+  largeFontZip.file("xl/styles.xml", styles.replace(/<font\b[^>]*>[\s\S]*?<\/font>/gi,
+    (font) => fontIndex++ === 5 ? font.replace(/<sz val="12"\/>/, '<sz val="24"/>') : font));
+  const largeFontDefinition = { ...Definitions.procurement,
+    base64: await largeFontZip.generateAsync({ type: "base64" }) };
+  const largeFontBytes = await Exporter.fillTemplate(largeFontDefinition, compactRows, metadata);
+  const largeFontSheet = XLSX.read(Buffer.from(largeFontBytes), { type: "buffer", cellStyles: true }).Sheets.Sheet1;
+  assert.ok(largeFontSheet["!rows"][4].hpt > 15.75, "模板字号变大后行高应相应增加");
+  assert.ok(largeFontSheet["!rows"][5].hpt > 90, "多行备注应使用实际字号估算，而非固定行高");
+
+  // Native (non-company) outputs and user-uploaded templates use the same fit.
+  const standard = Core.buildWorkbook(compactRows, metadata,
+    { selectedOutputs: ["detail"], skipInvalid: true, purchaseMode: "auto" }).workbook.Sheets["明细表"];
+  assert.ok(standard["!rows"][7].hpt > standard["!rows"][6].hpt, "普通明细表也应按内容自适应行高");
+  const templateBook = XLSX.utils.book_new();
+  const templateSheet = XLSX.utils.aoa_to_sheet([["名称", "型号", "数量"], ["", "", ""]]);
+  templateSheet["!cols"] = [{ wch: 10 }, { wch: 10 }, { wch: 8 }];
+  templateSheet["!rows"] = [{ hpt: 24 }, { hpt: 15.75 }];
+  XLSX.utils.book_append_sheet(templateBook, templateSheet, "模板");
+  const custom = Core.makeTemplateSheet(templateBook, "assembly", compactRows.map((row, index) =>
+    ({ ...row, description: index ? "很长的元件名称需要自动换行并完整显示" : "电容" })), metadata,
+    { valid: true, sheetName: "模板", headerRowIndex: 0, dataStartIndex: 1,
+      matches: [{ colIndex: 0, key: "description" }, { colIndex: 1, key: "model" }, { colIndex: 2, key: "quantity" }] });
+  assert.ok(custom["!rows"][2].hpt > custom["!rows"][1].hpt, "自定义模板长名称应加高");
+  assert.equal(custom["!rows"][0].hpt, 24, "自适应不得改变模板表头高度");
+  assert.equal(custom.A3.s.alignment.wrapText, true, "自定义模板必须同时启用自动换行");
+  assert.ok(Core.contentRowHeight([{ value: "中英文字段ABCD".repeat(5), width: 8, fontSize: 12 }]) >
+    Core.contentRowHeight([{ value: "中英文字段ABCD".repeat(5), width: 30, fontSize: 12 }]), "窄列应比宽列需要更高的行");
   console.log("exact template preservation and Excel compatibility tests passed");
 }
 

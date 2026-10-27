@@ -2,6 +2,8 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
+// 与用户给出的紧凑采购单保持相同列宽比例，不再将名称型号列压窄。
+const procurementColumnWidths = [5, 6.25, 32.75, 6.75, 5.25, 5.75, 13.5, 7.25, 6.375, 6.75, 5.75, 11.625, 9, 9, 9, 9];
 const configs = {
   assembly: {
     filename: "装配清单公司默认模板.xlsx",
@@ -67,6 +69,7 @@ const configs = {
       dataEndIndex: 90,
       footerStartIndex: 91,
       dataMaxCol: 15,
+      columnWidths: procurementColumnWidths,
       categorize: true,
       rowStyleRows: { category: 4, item: 5 },
       openView: "pageBreakPreview",
@@ -95,6 +98,7 @@ const configs = {
       dataEndIndex: 90,
       footerStartIndex: 91,
       dataMaxCol: 15,
+      columnWidths: procurementColumnWidths,
       categorize: true,
       categoryKey: "componentType",
       rowStyleRows: { category: 4, item: 5 },

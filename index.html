@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="离线智能识别 BOM 表头，校验数据并生成装配清单、领料单、采购清单、明细表和外购件汇总表。">
   <title>智料单 · BOM 工作台</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=1.43">
 </head>
 <body>
   <div class="app-shell">
@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.41 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.43 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -210,6 +210,20 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.43 网页版</strong><time>2026-10-27</time></div>
+        <ul>
+          <li>采购和外协阻容清单恢复参考版列宽：名称、型号列加宽，短型号单行紧凑显示，长规格才换行加高。</li>
+          <li>网页脚本与样式加入版本标记，更新后避免继续加载旧版缓存。数量和合并规则不变。</li>
+        </ul>
+      </section>
+      <section class="release">
+        <div class="release-heading"><strong>v1.42 网页版</strong><time>2026-10-23</time></div>
+        <ul>
+          <li>导出时按每行的文字、实际字号和列宽自适应行高；短内容保持紧凑，多行内容单独加高。</li>
+          <li>装配、采购、外协阻容、普通清单和自定义模板统一支持自动换行与行高计算；保留表头和分类行格式。</li>
+        </ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.41 网页版</strong><time>2026-10-09</time></div>
         <ul>
           <li>装配清单加宽“名称”“型号”和“封装”列，减少英文数字混合内容被拆成过多短行。</li>
@@ -474,14 +488,14 @@
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
-  <script src="vendor/cpexcel.full.js"></script>
-  <script src="vendor/xlsx.bundle.js"></script>
-  <script src="vendor/jszip.min.js"></script>
-  <script src="zip-utils.js"></script>
-  <script src="bom-core.js"></script>
-  <script src="excel-reader.js"></script>
-  <script src="default-templates.js"></script>
-  <script src="template-exporter.js"></script>
-  <script src="app.js"></script>
+  <script src="vendor/cpexcel.full.js?v=1.43"></script>
+  <script src="vendor/xlsx.bundle.js?v=1.43"></script>
+  <script src="vendor/jszip.min.js?v=1.43"></script>
+  <script src="zip-utils.js?v=1.43"></script>
+  <script src="bom-core.js?v=1.43"></script>
+  <script src="excel-reader.js?v=1.43"></script>
+  <script src="default-templates.js?v=1.43"></script>
+  <script src="template-exporter.js?v=1.43"></script>
+  <script src="app.js?v=1.43"></script>
 </body>
 </html>
