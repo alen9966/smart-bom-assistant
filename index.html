@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="离线智能识别 BOM 表头，校验数据并生成装配清单、领料单、采购清单、明细表和外购件汇总表。">
   <title>智料单 · BOM 工作台</title>
-  <link rel="stylesheet" href="styles.css?v=1.43">
+  <link rel="stylesheet" href="styles.css?v=1.44">
 </head>
 <body>
   <div class="app-shell">
@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.43 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.44 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -141,14 +141,13 @@
             <div class="form-grid">
               <label><span>项目工号</span><input id="projectCode" autocomplete="off" placeholder="例如 ZCJY260704"></label>
               <label><span>产品型号</span><input id="productModel" autocomplete="off" placeholder="例如 共视接收机"></label>
-              <label><span>板号</span><input id="pcbRevision" autocomplete="off" placeholder="例如 ZC7.820.0155-V3"></label>
               <label class="wide"><span>项目名称</span><input id="projectName" autocomplete="off" placeholder="例如 整机采购"></label>
               <label><span>批次</span><input id="batch" autocomplete="off" placeholder="例如 2601"></label>
               <label><span>生产数量</span><input id="multiplier" type="number" min="0.0001" step="any" value="1"></label>
               <label class="wide"><span>装配变量（如原始 BOM 没有此列，可在此手动填写；未填写时按“整机采购”处理）</span><input id="variant" autocomplete="off" placeholder="例如 整机采购 / 控制板A / 主控板B"></label>
               <label class="wide"><span>使用部门</span><input id="department" autocomplete="off" placeholder="例如 设备与系统"></label>
               <label class="wide"><span>PCB板厂</span><input id="pcbVendor" autocomplete="off" placeholder="例如 嘉立创"></label>
-              <p class="field-hint" id="pcbRevisionHint">板号会写入装配清单表头；填写板厂后，采购清单也会用板号追加印制板。上传 BOM 后也可从文件名自动识别。</p>
+              <p class="field-hint" id="pcbRevisionHint">导入后可在每份 BOM 下单独填写或修改板号。PCB 板厂为本批次共用。</p>
             </div>
 
             <div class="divider"></div>
@@ -199,7 +198,7 @@
       <div class="dialog-heading"><div><span class="eyebrow">QUICK GUIDE</span><h2>三步完成一份料单</h2></div><button id="closeHelp" type="button" aria-label="关闭">×</button></div>
       <ol class="help-steps">
         <li><span>1</span><div><strong>直接导入一个或多个原文件</strong><p>可选择「导入 AD / BOM」「导入装配清单」或「导入采购清单」。采购清单模式会自动识别分类行并筛选阻容，用于生成外协阻容备料单。</p></div></li>
-        <li><span>2</span><div><strong>确认黄色项目</strong><p>字段映射和异常行都有明确原因。出现乱码时，在“读取编码”中选择 GBK / GB18030 后重读；映射不准确时可用下拉框改正。</p></div></li>
+        <li><span>2</span><div><strong>确认板号和字段</strong><p>在每份 BOM 下分别确认 PCB 版号，可修改从文件名识别出的值。出现乱码时可切换读取编码，映射不准确时可用下拉框改正。</p></div></li>
         <li><span>3</span><div><strong>选择批量方式、模板并生成</strong><p>装配、领料、采购、外协阻容四类常用清单默认勾选，并可分别指定模板；其他报表可展开选择。外协阻容从采购清单中的电阻电容导出，并按生产数量计算。</p></div></li>
       </ol>
       <div class="dialog-note"><strong>隐私说明</strong><p>文件读取、计算和导出均在当前浏览器内完成，不会上传至服务器。</p></div>
@@ -210,6 +209,10 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.44 网页版</strong><time>2026-11-12</time></div>
+        <ul><li>每份 BOM 单独填写 PCB 版号，支持修改文件名识别的值；合并时按实际填写的版号去重。</li></ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.43 网页版</strong><time>2026-10-27</time></div>
         <ul>
           <li>采购和外协阻容清单恢复参考版列宽：名称、型号列加宽，短型号单行紧凑显示，长规格才换行加高。</li>
@@ -488,14 +491,14 @@
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
-  <script src="vendor/cpexcel.full.js?v=1.43"></script>
-  <script src="vendor/xlsx.bundle.js?v=1.43"></script>
-  <script src="vendor/jszip.min.js?v=1.43"></script>
-  <script src="zip-utils.js?v=1.43"></script>
-  <script src="bom-core.js?v=1.43"></script>
-  <script src="excel-reader.js?v=1.43"></script>
-  <script src="default-templates.js?v=1.43"></script>
-  <script src="template-exporter.js?v=1.43"></script>
-  <script src="app.js?v=1.43"></script>
+  <script src="vendor/cpexcel.full.js?v=1.44"></script>
+  <script src="vendor/xlsx.bundle.js?v=1.44"></script>
+  <script src="vendor/jszip.min.js?v=1.44"></script>
+  <script src="zip-utils.js?v=1.44"></script>
+  <script src="bom-core.js?v=1.44"></script>
+  <script src="excel-reader.js?v=1.44"></script>
+  <script src="default-templates.js?v=1.44"></script>
+  <script src="template-exporter.js?v=1.44"></script>
+  <script src="app.js?v=1.44"></script>
 </body>
 </html>

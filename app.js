@@ -41,7 +41,7 @@
     { key: "source", label: "来源" }
   ];
 
-  const metadataIds = ["projectCode", "productModel", "projectName", "batch", "multiplier", "variant", "department", "pcbRevision", "pcbVendor"];
+  const metadataIds = ["projectCode", "productModel", "projectName", "batch", "multiplier", "variant", "department", "pcbVendor"];
   const downloadUrls = new Set();
 
   function base64ToArrayBuffer(base64) {
@@ -142,7 +142,6 @@
     result.multiplier = Number($("#multiplier").value || 1);
     result.mode = state.mode;
     result.sourceFile = state.file ? state.file.name : "";
-    result.boardNo = result.pcbRevision || "";
     const all = rowsForAllDocuments();
     const manualVariant = String($("#variant").value || "").trim();
     if (manualVariant) {
@@ -307,23 +306,18 @@
   }
 
   function documentPcbRevision(documentItem) {
-    return BOMCore.pcbRevisionFromFilename(documentItem && documentItem.file && documentItem.file.name);
+    return String(documentItem.pcbRevision || "").trim();
   }
 
   function renderPcbRevisionHint() {
     const hint = $("#pcbRevisionHint");
     if (!hint) return;
-    const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
     const unnamed = state.documents.filter((item) => !documentPcbRevision(item)).length;
     if (!state.documents.length) {
-      hint.textContent = "板号会写入装配清单表头；填写板厂后采购清单也会用板号追加印制板。上传 BOM 后也可从文件名自动识别。";
+      hint.textContent = "导入后可在每份 BOM 下单独填写或修改板号。PCB 板厂为本批次共用。";
       return;
     }
-    if (revisions.length) {
-      hint.textContent = `已从文件名识别 ${revisions.length} 个板号：${revisions.join("、")}${unnamed ? `；另有 ${unnamed} 个文件未能识别，可在上方补填` : "。分别生成时装配表头各用本文件板号；采购印制板合并时每个板号一行。"}`;
-      return;
-    }
-    hint.textContent = "当前文件名未能识别板号，可手动填写；装配表头只显示板号，填了板厂后才会追加印制板。";
+    hint.textContent = `已填写 ${state.documents.length - unnamed}/${state.documents.length} 份 BOM 的板号${unnamed ? "，可在文件列表补填" : ""}。填写板厂后，采购清单按板号追加印制板。`;
   }
 
   function renderBomFileList() {
@@ -337,9 +331,24 @@
     container.innerHTML = state.documents.map((documentItem, index) => {
       const errorCount = (documentItem.rows || []).filter((row) => row.errors.length).length;
       const revision = documentPcbRevision(documentItem);
-      return `<button class="bom-file-chip ${documentItem.id === state.activeDocumentId ? "active" : ""}" data-document-id="${documentItem.id}" type="button"><strong>${index + 1}. ${escapeHtml(documentItem.file.name)}</strong><span class="chip-meta">${revision ? `<em class="pcb-rev" title="PCB版号">${escapeHtml(revision)}</em>` : ""}<em>${errorCount ? `${errorCount} 错误` : `${documentItem.rows.length} 行`}</em></span></button>`;
+      const filename = escapeHtml(documentItem.file.name);
+      return `<div class="bom-file-card">
+        <button class="bom-file-chip ${documentItem.id === state.activeDocumentId ? "active" : ""}" data-document-id="${documentItem.id}" type="button" title="${filename}"><strong>${index + 1}. ${filename}</strong><em>${errorCount ? `${errorCount} 错误` : `${documentItem.rows.length} 行`}</em></button>
+        <label class="bom-file-revision"><span>PCB 版号</span><input data-pcb-document-id="${documentItem.id}" value="${escapeHtml(revision)}" aria-label="${filename} 的 PCB 版号" autocomplete="off" placeholder="例如 ZC7.820.0155-V3"></label>
+      </div>`;
     }).join("");
     container.querySelectorAll("[data-document-id]").forEach((button) => button.addEventListener("click", () => activateDocument(button.dataset.documentId)));
+    container.querySelectorAll("[data-pcb-document-id]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const item = state.documents.find((documentItem) => documentItem.id === input.dataset.pcbDocumentId);
+        if (item) item.pcbRevision = input.value;
+        renderPcbRevisionHint();
+      });
+      input.addEventListener("change", () => {
+        input.value = input.value.trim();
+        updateGenerationState();
+      });
+    });
   }
 
   function activateDocument(id) {
@@ -620,12 +629,11 @@
     else if (errorCount) note.textContent = `有 ${errorCount} 行错误；生成时将${$("#skipInvalid").checked ? "跳过错误行，并附问题清单" : "保留问题清单"}`;
     else {
       const vendor = $("#pcbVendor").value.trim();
-      const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
-      const manualRevision = $("#pcbRevision").value.trim();
-      if (vendor && (revisions.length || manualRevision)) {
-        const count = revisions.length || 1;
-        note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪；采购清单将追加 ${count} 个印制板版号`;
-      } else if (!vendor && (revisions.length || manualRevision)) {
+      const revisions = state.documents.map(documentPcbRevision).filter(Boolean);
+      const count = state.exportMode === "combined" ? new Set(revisions).size : revisions.length;
+      if (state.selectedOutputs.has("procurement") && vendor && count) {
+        note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪；采购清单将使用 ${count} 个印制板版号`;
+      } else if (state.selectedOutputs.has("procurement") && !vendor && count) {
         note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪；填写 PCB 板厂后才会追加印制板`;
       } else {
         note.textContent = `${state.documents.length} 个 BOM、${allRows.length} 行数据已就绪`;
@@ -713,6 +721,7 @@
     return {
       id: `bom-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       file,
+      pcbRevision: BOMCore.pcbRevisionFromFilename(file.name),
       workbook,
       analysis,
       sheet,
@@ -804,7 +813,11 @@
     try {
       const replacement = await parseDocument(current.file, preference);
       replacement.id = current.id;
-      state.documents[index] = replacement;
+      replacement.pcbRevision = current.pcbRevision;
+      const currentIndex = state.documents.indexOf(current);
+      if (currentIndex < 0) return;
+      state.documents[currentIndex] = replacement;
+      if (state.activeDocumentId === current.id) state.activeDocumentId = null;
       activateDocument(replacement.id);
       setNotice(replacement.encodingSuspicious ? "warning" : "success", replacement.encodingSuspicious
         ? `已按 ${replacement.encodingLabel} 重读，但仍检测到异常字符。可以尝试另一种编码。`
@@ -984,12 +997,24 @@
   }
 
   function documentMetadata(documentItem, baseMetadata) {
-    const fromFile = documentPcbRevision(documentItem);
+    const revision = documentPcbRevision(documentItem);
     return {
       ...baseMetadata,
       sourceFile: documentItem.file.name,
-      pcbRevision: baseMetadata.pcbRevision || fromFile,
-      boardNo: baseMetadata.pcbRevision || fromFile
+      pcbRevision: revision,
+      boardNo: revision,
+      pcbRevisions: revision ? [revision] : []
+    };
+  }
+
+  function combinedDocumentMetadata(documents, baseMetadata) {
+    const revisions = [...new Set(documents.map(documentPcbRevision).filter(Boolean))];
+    return {
+      ...baseMetadata,
+      sourceFile: `${documents.length} 个 BOM 合并`,
+      pcbRevision: revisions.length === 1 ? revisions[0] : "",
+      boardNo: revisions.join("\n"),
+      pcbRevisions: revisions
     };
   }
 
@@ -1009,14 +1034,7 @@
 
       if (state.exportMode === "combined") {
         const combinedRows = state.documents.flatMap((documentItem) => documentItem.rows || []);
-        const revisions = [...new Set(state.documents.map(documentPcbRevision).filter(Boolean))];
-        const combinedMetadata = {
-          ...baseMetadata,
-          sourceFile: `${state.documents.length} 个 BOM 合并`,
-          pcbRevision: baseMetadata.pcbRevision || (revisions.length === 1 ? revisions[0] : ""),
-          boardNo: baseMetadata.pcbRevision || (revisions.length === 1 ? revisions[0] : ""),
-          pcbRevisions: revisions
-        };
+        const combinedMetadata = combinedDocumentMetadata(state.documents, baseMetadata);
         const result = await buildOutputFiles(combinedRows, combinedMetadata, commonOptions);
         const saved = await downloadOutputFiles(result.files);
         toast(completionMessage(result.files.length, saved));

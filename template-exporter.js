@@ -109,8 +109,8 @@
       .replace(/\{\{使用部门\}\}/g, metadata.department || "")
       .replace(/\{\{项目工号\}\}/g, metadata.projectCode || "")
       .replace(/\{\{产品型号\}\}/g, productModel)
-      .replace(/\{\{板号\}\}/g, boardNo)
-      .replace(/\{\{PCB版号\}\}/g, boardNo)
+      .replace(/\{\{板号\}\}/g, () => boardNo)
+      .replace(/\{\{PCB版号\}\}/g, () => boardNo)
       .replace(/\{\{项目名称\}\}/g, metadata.projectName || "")
       .replace(/\{\{生产数量\}\}/g, String(metadata.multiplier || 1))
       .replace(/\{\{批次\}\}/g, metadata.batch || "")
@@ -677,9 +677,21 @@
     const stylesEntry = zip.file("xl/styles.xml");
     const sourceStylesXml = stylesEntry ? await stylesEntry.async("string") : "";
     const fontSizes = styleFontSizes(sourceStylesXml);
+    const usedStyleIds = new Set();
 
     Object.entries(inspection.metadataCells || {}).forEach(([address, template]) => {
-      xml = setCell(xml, address, metadataText(template, metadata));
+      const value = metadataText(template, metadata);
+      xml = setCell(xml, address, value);
+      if (metadata.pcbRevisions?.length > 1 && /\{\{(?:板号|PCB版号)\}\}/.test(template)) {
+        const styleId = cellStyle(xml, address);
+        if (styleId) usedStyleIds.add(styleId);
+        const mergedEnd = xml.match(new RegExp(`<mergeCell\\b[^>]*\\bref=["']${address}:([A-Z]+)\\d+["']`, "i"));
+        const start = columnIndex(address);
+        const end = mergedEnd ? columnIndex(mergedEnd[1]) : start;
+        const width = columnWidths.slice(start, end + 1).reduce((sum, size) => sum + size, 0);
+        const row = rowNumber(address);
+        xml = setRowHeight(xml, row, BOMCore.contentRowHeight([{ value, width, fontSize: fontSizes[Number(styleId)] }], rowHeightBaseline(xml, row)));
+      }
     });
 
     const dataStartRow = inspection.dataStartIndex + 1;
@@ -689,7 +701,6 @@
     }
 
     const valueOptions = { dataStartRow, quantityFormula: null };
-    const usedStyleIds = new Set();
     const leftAlignCells = [];
     Object.values(styles).forEach((rowStyles) => {
       (rowStyles || []).forEach((styleId) => { if (styleId) usedStyleIds.add(String(styleId)); });

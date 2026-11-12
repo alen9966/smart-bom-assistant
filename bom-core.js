@@ -750,8 +750,7 @@
 
   function printedBoardRevisions(rows, options) {
     if (Array.isArray(options && options.pcbRevisions)) {
-      const explicit = [...new Set(options.pcbRevisions.map(text).filter(Boolean))];
-      if (explicit.length) return explicit;
+      return [...new Set(options.pcbRevisions.map(text).filter(Boolean))];
     }
     const fromFiles = uniquePcbRevisionsFromNames(sourceFilenames(rows, options));
     if (fromFiles.length) return fromFiles;
@@ -1192,7 +1191,7 @@
         if (!cell || typeof cell.v !== "string") continue;
         let value = cell.v;
         Object.entries(placeholders).forEach(([label, key]) => {
-          value = value.replace(new RegExp(`\\{\\{\\s*${label}\\s*\\}\\}`, "g"), text(metadata[key]));
+          value = value.replace(new RegExp(`\\{\\{\\s*${label}\\s*\\}\\}`, "g"), () => text(label === "板号" ? fields["板号"] : metadata[key]));
           value = value.replace(new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, "gi"), text(metadata[key]));
         });
         if (value !== cell.v) sheet[address] = setCellValue(cell, value);
