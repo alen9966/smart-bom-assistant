@@ -4,6 +4,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 // 与用户给出的紧凑采购单保持相同列宽比例，不再将名称型号列压窄。
 const procurementColumnWidths = [5, 6.25, 32.75, 6.75, 5.25, 5.75, 13.5, 7.25, 6.375, 6.75, 5.75, 11.625, 9, 9, 9, 9];
+const orderQuantityFormula = { baseCol: "F", backupCol: "I", installedCol: "J", orderCol: "K" };
 const configs = {
   assembly: {
     filename: "装配清单公司默认模板.xlsx",
@@ -70,6 +71,7 @@ const configs = {
       footerStartIndex: 91,
       dataMaxCol: 15,
       columnWidths: procurementColumnWidths,
+      orderQuantityFormula,
       categorize: true,
       rowStyleRows: { category: 4, item: 5 },
       openView: "pageBreakPreview",
@@ -78,7 +80,7 @@ const configs = {
       pageFooter: "&C第 &P 页，共 &N 页",
       fitToPageWidth: true,
       sheetPath: "xl/worksheets/sheet1.xml",
-      metadataCells: { A2: "申请部门：{{使用部门}} 工号：{{项目工号}} 产品型号名称：{{产品型号}} {{项目名称}} 投产数量：{{生产数量}} 筛选要求：无" },
+      metadataCells: { A2: "申请部门：{{使用部门}} 工号：{{项目工号}} 产品型号名称：{{产品型号}} {{项目名称}} 投产数量见 J4　筛选要求：无" },
       matches: [
         [0, "_index"], [1, "drawingNo"], [2, "modelOrDescription"], [3, "quality"],
         [5, "baseQuantity"], [6, "vendor"], [7, "_yes"], [8, "_zero"], [9, "quantity"],
@@ -99,6 +101,7 @@ const configs = {
       footerStartIndex: 91,
       dataMaxCol: 15,
       columnWidths: procurementColumnWidths,
+      orderQuantityFormula,
       categorize: true,
       categoryKey: "componentType",
       rowStyleRows: { category: 4, item: 5 },
@@ -108,7 +111,7 @@ const configs = {
       pageFooter: "&C第 &P 页，共 &N 页",
       fitToPageWidth: true,
       sheetPath: "xl/worksheets/sheet1.xml",
-      metadataCells: { A2: "申请部门：{{使用部门}} 工号：{{项目工号}} 产品型号名称：{{产品型号}} {{项目名称}} 投产数量：{{生产数量}} 筛选要求：无" },
+      metadataCells: { A2: "申请部门：{{使用部门}} 工号：{{项目工号}} 产品型号名称：{{产品型号}} {{项目名称}} 投产数量见 J4　筛选要求：无" },
       matches: [
         [0, "_index"], [1, "drawingNo"], [2, "modelOrDescription"], [3, "quality"],
         [5, "baseQuantity"], [6, "vendor"], [7, "_yes"], [8, "_zero"], [9, "quantity"],

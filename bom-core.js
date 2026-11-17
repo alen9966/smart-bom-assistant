@@ -27,18 +27,21 @@
     { key: "drawingNo", label: "图号", aliases: ["代号", "图号", "图纸号", "零件图号", "drawing", "drawing no", "drawing number"] },
     { key: "assemblyName", label: "装配项目", aliases: ["装配清单", "装配项目", "装配名称", "组件名称", "组件", "总成", "assembly", "assembly name", "subassembly"] },
     { key: "variant", label: "装配变量", aliases: ["装配变量", "变量", "变量名", "variant", "variation", "bom variant"] },
-    { key: "remark", label: "备注", aliases: ["备注", "说明", "注释", "特殊要求", "remark", "remarks", "note", "notes"] }
+    { key: "remark", label: "备注", aliases: ["备注", "说明", "注释", "特殊要求", "remark", "remarks", "note", "notes"] },
+    { key: "componentValue", label: "元件参数（Value）", aliases: [] },
+    { key: "supplierPartNumber", label: "商城料号", aliases: [] },
+    { key: "supplierName", label: "商城 / 供应商", aliases: [] }
   ];
 
   const FIELD_MAP = Object.fromEntries(FIELD_DEFS.map((field) => [field.key, field]));
 
   const OUTPUT_DEFS = {
-    assembly: { label: "装配清单", description: "逐项保留位号、图号与装配来源", modes: ["bom"], primary: true },
-    picking: { label: "领料单", description: "按物料合并数量并汇总位号", modes: ["bom", "assembly"] },
-    procurement: { label: "采购清单", description: "仅汇总判定为外购的物料", modes: ["bom"], primary: true },
-    detail: { label: "明细表", description: "标准化后的完整可追溯明细", modes: ["bom", "assembly"] },
-    purchased: { label: "外购件汇总表", description: "按厂家、型号归集外购需求", modes: ["bom", "assembly"] },
-    subcontract: { label: "外协阻容备料清单", description: "筛选电阻、电容，按生产数量生成外协备料表", modes: ["bom", "assembly", "procurement"], primary: true }
+    assembly: { label: "装配清单", description: "逐项保留位号、图号与装配来源", modes: ["bom", "jlcpcb"], primary: true },
+    picking: { label: "领料单", description: "按物料合并数量并汇总位号", modes: ["bom", "jlcpcb", "assembly"] },
+    procurement: { label: "采购清单", description: "仅汇总判定为外购的物料", modes: ["bom", "jlcpcb"], primary: true },
+    detail: { label: "明细表", description: "标准化后的完整可追溯明细", modes: ["bom", "jlcpcb", "assembly"] },
+    purchased: { label: "外购件汇总表", description: "按厂家、型号归集外购需求", modes: ["bom", "jlcpcb", "assembly"] },
+    subcontract: { label: "外协阻容备料清单", description: "筛选电阻、电容，按生产数量生成外协备料表", modes: ["bom", "jlcpcb", "assembly", "procurement"], primary: true }
   };
 
   const HEADER_REQUIREMENTS = [
@@ -202,7 +205,7 @@
   }
 
   function rankHeader(header) {
-    const ranked = FIELD_DEFS.map((field) => {
+    const ranked = FIELD_DEFS.filter((field) => field.aliases.length).map((field) => {
       const confidence = Math.max(...field.aliases.map((alias) => aliasScore(header, alias)));
       return { field: field.key, label: field.label, confidence };
     }).sort((a, b) => b.confidence - a.confidence);
@@ -349,18 +352,43 @@
     };
   }
 
+  const JLC_HEADERS = new Map([
+    ["no", ""], ["序号", ""],
+    ["quantity", "quantity"], ["数量", "quantity"],
+    ["comment", "description"], ["名称", "description"], ["元件名称", "description"],
+    ["designator", "designator"], ["位号", "designator"],
+    ["footprint", "footprint"], ["封装", "footprint"],
+    ["value", "componentValue"], ["参数", "componentValue"], ["数值", "componentValue"],
+    ["manufacturerpart", "manufacturerPartNumber"], ["manufacturerpartnumber", "manufacturerPartNumber"], ["厂家料号", "manufacturerPartNumber"], ["制造商料号", "manufacturerPartNumber"],
+    ["manufacturer", "vendor"], ["制造商", "vendor"], ["厂家", "vendor"],
+    ["supplierpart", "supplierPartNumber"], ["supplierpartnumber", "supplierPartNumber"], ["供应商料号", "supplierPartNumber"], ["商城编号", "supplierPartNumber"], ["立创商城编号", "supplierPartNumber"],
+    ["supplier", "supplierName"], ["供应商", "supplierName"], ["商城", "supplierName"]
+  ]);
+
+  function isJlcHeader(row) {
+    const fields = new Set(row.map((value) => JLC_HEADERS.get(normalizeText(value))));
+    // Require both kinds of part number so an ordinary AD Comment/Value header
+    // keeps its existing meaning.
+    return ["quantity", "designator", "footprint", "manufacturerPartNumber", "supplierPartNumber"].every((key) => fields.has(key))
+      && (fields.has("description") || fields.has("componentValue"));
+  }
+
   function reanalyzeWithHeader(sheetAnalysis, headerRowIndex, headerSpan) {
     const rows = sheetAnalysis.rows || [];
     const rowIndex = Math.max(0, Math.min(rows.length - 1, Number(headerRowIndex) || 0));
     const span = headerSpan === 2 ? 2 : 1;
+    const jlc = span === 1 && isJlcHeader(rows[rowIndex] || []);
     const candidate = evaluateHeaderCandidate(rows, rowIndex, span);
     const nextRows = rows.slice(rowIndex, Math.min(rows.length, rowIndex + span + 20));
     const colCount = Math.min(MAX_SCAN_COLS, Math.max(0, ...nextRows.map((row) => row.length)));
     const headers = [];
     const suggestions = [];
     for (let col = 0; col < colCount; col += 1) {
-      const rawHeader = combinedHeader(rows, rowIndex, span, col) || `未命名列 ${columnName(col)}`;
-      const ranked = rankHeader(rawHeader);
+      const rawHeader = (jlc ? text(rows[rowIndex][col]) : combinedHeader(rows, rowIndex, span, col)) || `未命名列 ${columnName(col)}`;
+      const exact = jlc ? JLC_HEADERS.get(normalizeText(rawHeader)) : undefined;
+      const ranked = exact === undefined ? rankHeader(rawHeader) : [
+        { field: exact, label: exact ? FIELD_MAP[exact].label : "", confidence: exact ? 1 : 0 }
+      ];
       headers.push({ colIndex: col, label: rawHeader, column: columnName(col) });
       suggestions.push({ colIndex: col, header: rawHeader, field: ranked[0].confidence >= 0.56 ? ranked[0].field : "", confidence: ranked[0].confidence, alternatives: ranked.slice(0, 3) });
     }
@@ -377,6 +405,7 @@
     const averageConfidence = matched.length ? matched.reduce((sum, item) => sum + item.confidence, 0) / matched.length : 0;
     return {
       ...sheetAnalysis,
+      bomFormat: jlc ? "jlcpcb" : "",
       recognized: matched.length >= 2,
       score: candidate.score,
       recognitionScore: Math.round((averageConfidence * 0.75 + Math.min(1, matched.length / 7) * 0.25) * 100),
@@ -390,12 +419,22 @@
     };
   }
 
-  function analyzeWorkbook(workbook) {
+  function analyzeWorkbook(workbook, options) {
     if (!workbook || !Array.isArray(workbook.SheetNames) || !workbook.SheetNames.length) {
       throw new Error("没有找到可读取的工作表。请确认文件不是空文件或受密码保护。");
     }
-    const sheets = workbook.SheetNames.map((name, index) => analyzeSheet(workbook.Sheets[name], name, index));
-    const recognizedSheets = sheets.filter((sheet) => sheet.recognized).sort((a, b) => b.score - a.score);
+    const preferJlc = options && options.preferJlc;
+    const sheets = workbook.SheetNames.map((name, index) => {
+      const source = workbook.Sheets[name];
+      if (preferJlc) {
+        const rows = sheetRows(source);
+        const header = rows.slice(0, MAX_SCAN_ROWS).findIndex(isJlcHeader);
+        if (header >= 0) return reanalyzeWithHeader({ name, index, rows }, header, 1);
+      }
+      return analyzeSheet(source, name, index);
+    });
+    const recognizedSheets = sheets.filter((sheet) => sheet.recognized).sort((a, b) =>
+      Number(b.bomFormat === "jlcpcb") - Number(a.bomFormat === "jlcpcb") || b.score - a.score);
     return {
       sheets,
       recognizedSheets,
@@ -422,7 +461,7 @@
     return new Set(mapping.filter(Boolean));
   }
 
-  function validateMapping(mapping) {
+  function validateMapping(mapping, bomFormat) {
     const used = mapping.filter(Boolean);
     const duplicates = used.filter((field, index) => used.indexOf(field) !== index);
     const fields = mappedFields(mapping);
@@ -430,7 +469,9 @@
     if (duplicates.length) issues.push({ level: "error", message: `字段重复对应：${[...new Set(duplicates)].map((key) => FIELD_MAP[key].label).join("、")}` });
     if (!fields.has("quantity")) issues.push({ level: "error", message: "尚未指定“数量”列" });
     if (!fields.has("variant")) issues.push({ level: "warning", message: "原始 BOM 未包含“装配变量（Variant）”列，可在页面“项目信息”的“装配变量”框中手动填写；未填写时按“整机采购”处理" });
-    if (!["partNumber", "model", "description", "drawingNo", "assemblyName"].some((field) => fields.has(field))) {
+    const identifiers = ["partNumber", "model", "description", "drawingNo", "assemblyName"];
+    if (bomFormat === "jlcpcb") identifiers.push("manufacturerPartNumber", "componentValue", "supplierPartNumber");
+    if (!identifiers.some((field) => fields.has(field))) {
       issues.push({ level: "error", message: "至少指定物料编码、型号/规格、物料名称、图号或装配项目中的一项" });
     }
     if (!fields.has("unit")) issues.push({ level: "warning", message: "未找到单位列，导出时将使用“件”" });
@@ -501,7 +542,17 @@
     return result;
   }
 
-  function buildNormalizedRow(rawRow, sourceRow, sheetName, mapping, multiplier, fallbackVariant) {
+  function addJlcWarning(row) {
+    if (row.bomFormat === "jlcpcb" && !row.manufacturerPartNumber) {
+      row.warnings.push({ field: "model", message: "嘉立创 BOM 未填写厂家料号；导出保留现有参数或名称，采购前请确认实际型号" });
+    }
+  }
+
+  function hasIdentity(row) {
+    return [row.partNumber, row.model, row.description, row.drawingNo, row.assemblyName].some((value) => text(value));
+  }
+
+  function buildNormalizedRow(rawRow, sourceRow, sheetName, mapping, multiplier, fallbackVariant, bomFormat) {
     const row = {
       category: "", designator: "", partNumber: "", description: "", model: "", footprint: "", quality: "",
       quantityRaw: "", baseQuantity: null, quantity: null, unit: "", vendor: "", manufacturerPartNumber: "", source: "",
@@ -513,6 +564,19 @@
       if (field === "quantity") row.quantityRaw = text(value);
       else row[field] = text(value);
     });
+    if (bomFormat === "jlcpcb") {
+      row.bomFormat = bomFormat;
+      row.description ||= row.componentValue || row.manufacturerPartNumber || row.supplierPartNumber || "";
+      row.model ||= row.manufacturerPartNumber || row.componentValue || row.description;
+      row.remark = [
+        row.remark,
+        row.componentValue && row.componentValue !== row.model ? `参数：${row.componentValue}` : "",
+        !row.manufacturerPartNumber && row.footprint ? `封装：${row.footprint}` : "",
+        !row.manufacturerPartNumber ? "厂家料号未填写" : "",
+        row.supplierPartNumber || row.supplierName
+          ? `商城：${[row.supplierName, row.supplierPartNumber].filter(Boolean).join(" ")}` : ""
+      ].filter(Boolean).join("；");
+    }
     const inferred = inferPassiveFields(row);
     if (!row.description) row.description = inferred.description;
     if (!row.footprint) row.footprint = inferred.footprint;
@@ -523,7 +587,7 @@
       row.quantity = parsed.value * multiplier;
     }
 
-    if (![row.partNumber, row.model, row.description, row.drawingNo, row.assemblyName].some(Boolean)) {
+    if (!hasIdentity(row)) {
       row.errors.push({ field: "identity", message: "缺少物料标识：编码、型号、名称、图号和装配项目均为空" });
     }
     if (!row.unit) {
@@ -541,6 +605,8 @@
       }
     }
     if (!row.partNumber && row.model) row.warnings.push({ field: "partNumber", message: "没有物料编码，汇总时将使用型号/名称作为识别依据" });
+    addJlcWarning(row);
+    addSubcontractModelWarning(row);
     row.status = row.errors.length ? "error" : row.warnings.length ? "warning" : "ok";
     return row;
   }
@@ -553,7 +619,7 @@
   }
 
   function extractRows(sheetAnalysis, mapping, multiplier, options) {
-    const mappingCheck = validateMapping(mapping);
+    const mappingCheck = validateMapping(mapping, sheetAnalysis.bomFormat);
     if (!mappingCheck.valid) return { rows: [], mappingCheck, truncated: false, skippedBlankRows: 0, skippedCategoryRows: 0 };
     const numericMultiplier = Number(multiplier);
     if (!Number.isFinite(numericMultiplier) || numericMultiplier <= 0) {
@@ -572,7 +638,7 @@
         skippedBlankRows += 1;
         return;
       }
-      const row = buildNormalizedRow(rawRow, sheetAnalysis.dataStartIndex + offset + 1, sheetAnalysis.name, mapping, numericMultiplier, fallbackVariant);
+      const row = buildNormalizedRow(rawRow, sheetAnalysis.dataStartIndex + offset + 1, sheetAnalysis.name, mapping, numericMultiplier, fallbackVariant, sheetAnalysis.bomFormat);
       if (carryCategory && isCategoryMarkerRow(row)) {
         currentCategory = text(row.model || row.description || row.partNumber);
         skippedCategoryRows += 1;
@@ -603,7 +669,7 @@
       clean.baseQuantity = parsed.value;
       clean.quantity = parsed.value * Number(multiplier || 1);
     }
-    if (![clean.partNumber, clean.model, clean.description, clean.drawingNo, clean.assemblyName].some((value) => text(value))) {
+    if (!hasIdentity(clean)) {
       clean.errors.push({ field: "identity", message: "缺少物料标识：编码、型号、名称、图号和装配项目均为空" });
     }
     if (!clean.unit) {
@@ -621,6 +687,8 @@
       }
     }
     if (!clean.partNumber && clean.model) clean.warnings.push({ field: "partNumber", message: "没有物料编码，汇总时将使用型号/名称作为识别依据" });
+    addJlcWarning(clean);
+    addSubcontractModelWarning(clean);
     clean.status = clean.errors.length ? "error" : clean.warnings.length ? "warning" : "ok";
     return clean;
   }
@@ -642,7 +710,7 @@
     // Only merge rows whose material-defining fields all agree. A model code in a
     // source BOM can be stale or reused accidentally; model-only grouping would
     // otherwise combine different values/packages and silently discard their names.
-    return [
+    const fields = [
       row.partNumber,
       row.manufacturerPartNumber,
       row.description,
@@ -653,7 +721,12 @@
       row.quality,
       row.unit,
       includeVendor ? row.vendor : ""
-    ].map(normalizeText).join("|");
+    ];
+    if (row.bomFormat === "jlcpcb") {
+      // In a numeric specification, punctuation and case can be significant.
+      return JSON.stringify(["jlcpcb", ...fields, row.componentValue, row.supplierPartNumber, row.supplierName].map(text));
+    }
+    return fields.map(normalizeText).join("|");
   }
 
   function uniqueJoined(values, limit) {
@@ -825,17 +898,48 @@
   }
 
   function resistorCapacitorType(row) {
-    const descriptive = normalizeText([row.category, row.description, row.assemblyName].filter(Boolean).join(" "));
+    const category = normalizeText(row.category);
+    const resistor = /电阻|排阻|resistor|^res$/i;
+    const capacitor = /电容|capacitor|^cap$/i;
+    // Explicit BOM categories override ambiguous model suffixes and designators.
+    if (/集成电路|芯片|半导体|[二三][极级]管|电感|磁珠|接插|连接器|晶振|振荡器|变压器|继电器|开关|保险丝|电源模块|^(?:ic|diode|transistor|inductor|ferrite|ferritebead|connector|crystal|oscillator|transformer|relay|switch|fuse)$/i.test(category)) return "";
+    if (resistor.test(category)) return "电阻";
+    if (capacitor.test(category)) return "电容";
+    const descriptive = normalizeText([row.description, row.assemblyName].filter(Boolean).join(" "));
     const model = text(row.model || row.description).toLowerCase();
     const designators = text(row.designator).split(/[，,;；\s/]+/).filter(Boolean);
-    if (/电阻|排阻|可调电阻|resistor|res\b/i.test(descriptive) || model.includes("ω") || /(?:ohm|Ω)/i.test(model)) return "电阻";
-    if (/电容|钽电容|capacitor|cap\b/i.test(descriptive) || /(?:^|[^a-z])\d+(?:\.\d+)?\s*(?:pf|nf|uf|μf|µf|mf)(?:[^a-z]|$)/i.test(model)) return "电容";
+    if (resistor.test(descriptive) || model.includes("ω") || /ohm/i.test(model)) return "电阻";
+    if (capacitor.test(descriptive) || /(?:^|[^a-z0-9.])\d+(?:\.\d+)?\s*(?:pf|nf|uf|μf|µf|mf)(?:[^a-z0-9]|$)/i.test(model)) return "电容";
     if (designators.some((item) => /^R\d/i.test(item))) return "电阻";
     if (designators.some((item) => /^C\d/i.test(item))) return "电容";
     if (/^(?:rc|rs)[-_]?\d/i.test(model) || /^r\d{2,}/i.test(model)) return "电阻";
     if (/^(?:0201|0402|0603|0805|1206|1210|1812)[a-z]/i.test(model)) return "电容";
-    if (descriptive.includes("阻容")) return "阻容";
+    if (category.includes("阻容") || descriptive.includes("阻容")) return "阻容";
     return "";
+  }
+
+  function hasMixedPassiveModels(row) {
+    const groups = text(row.model || row.description).split(/[,，;；]/);
+    if (groups.length < 2) return false;
+    // Only flag separately listed complete model codes, not comma-separated specs
+    // like “10kΩ, 1%, 0603”. Explicit alternatives joined with “或” stay together.
+    const codes = groups.map((group) => text(group).match(/^([A-Z0-9][A-Z0-9._-]{5,})(?=$|[\s/或])/i)?.[1])
+      .filter((code) => code && /[a-z]/i.test(code) && /\d/.test(code));
+    return new Set(codes.map((code) => code.toUpperCase())).size > 1;
+  }
+
+  function addSubcontractModelWarning(row) {
+    if (!isPrintedBoard(row) && resistorCapacitorType(row) && hasMixedPassiveModels(row)) {
+      row.warnings.push({ field: "model", message: "同一行含多个型号但未分别注明数量，外协备料前请按型号拆分并核对位号和数量" });
+    }
+  }
+
+  function assertSubcontractReady(outputs) {
+    const pending = outputs.subcontractPending;
+    if (!pending.length) return;
+    const first = pending[0];
+    const location = [first.sourceFile, first.sourceSheet, first.sourceRow ? `第 ${first.sourceRow} 行` : ""].filter(Boolean).join(" / ");
+    throw new Error(`外协备料有 ${pending.length} 行混写多个型号、数量未拆分${location ? `（${location}）` : ""}。请按型号拆分原表并重新导入。`);
   }
 
   function baseQuantityOf(row) {
@@ -857,10 +961,17 @@
     const subcontractMultiplier = Number(options.multiplier || 1);
     // 外协阻容：采购导入模式直接筛阻容；BOM/装配模式从外购物料中筛阻容
     const subcontractBase = mode === "procurement" ? withPurchase : purchasedRows;
-    const subcontractSource = subcontractBase
+    const subcontractCandidates = subcontractBase
       .filter((row) => !isPrintedBoard(row))
       .map((row) => ({ ...row, componentType: resistorCapacitorType(row) }))
-      .filter((row) => row.componentType)
+      .filter((row) => row.componentType);
+    const subcontractPending = [];
+    const subcontractSource = subcontractCandidates
+      .filter((row) => {
+        if (!hasMixedPassiveModels(row)) return true;
+        subcontractPending.push(row);
+        return false;
+      })
       .map((row) => ({ ...row, quantity: baseQuantityOf(row) * subcontractMultiplier }));
     const picking = aggregateRows(withPurchase, false);
     const assembly = aggregateRows(withPurchase, true).map((row) => ({
@@ -874,7 +985,7 @@
       ...row,
       baseQuantity: subcontractMultiplier ? Number(row.quantity || 0) / subcontractMultiplier : Number(row.quantity || 0)
     }));
-    return { source: rows, validRows: withPurchase, assembly, picking, procurement, detail: withPurchase, purchased, subcontract, issues: summarizeIssues(rows) };
+    return { source: rows, validRows: withPurchase, assembly, picking, procurement, detail: withPurchase, purchased, subcontract, subcontractPending, issues: summarizeIssues(rows) };
   }
 
   const OUTPUT_COLUMNS = {
@@ -1310,6 +1421,7 @@
     });
     const selectedOutputs = (options.selectedOutputs || []).filter((key) => OUTPUT_DEFS[key]);
     if (!selectedOutputs.length) throw new Error("请至少选择一种需要生成的清单。");
+    if (selectedOutputs.includes("subcontract")) assertSubcontractReady(outputs);
     const now = new Date();
     const generatedAt = now.toLocaleString("zh-CN", { hour12: false });
     const fullMetadata = { ...metadata, generatedAt, multiplier: Number(metadata.multiplier || 1) };
@@ -1359,6 +1471,7 @@
     withPrintedBoard,
     isCategoryMarkerRow,
     resistorCapacitorType,
+    assertSubcontractReady,
     buildOutputs,
     inspectTemplate,
     makeTemplateSheet,

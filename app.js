@@ -208,7 +208,7 @@
     };
     container.innerHTML = `${primary.length ? `<div class="output-group-title">常用清单 · 默认勾选</div>${primary.map(renderOption).join("")}` : ""}
       ${secondary.length ? `<details class="other-outputs"><summary>其他报表（${secondary.length} 类）</summary><div class="other-output-list">${secondary.map(renderOption).join("")}</div></details>` : ""}`;
-    $("#modeExportHint").textContent = state.mode === "bom"
+    $("#modeExportHint").textContent = state.mode === "bom" || state.mode === "jlcpcb"
       ? "默认生成装配、采购和外协阻容三类常用清单"
       : state.mode === "procurement"
         ? "导入采购清单后，默认仅生成外协阻容备料清单"
@@ -439,11 +439,12 @@
 
   function renderMapping() {
     const container = $("#mappingGrid");
+    const fields = BOMCore.FIELD_DEFS.filter((field) => field.aliases.length || state.sheet.bomFormat === "jlcpcb");
     container.innerHTML = state.sheet.headers.map((header, index) => {
       const suggestion = state.sheet.suggestions[index] || { confidence: 0, field: "" };
       const level = suggestion.confidence >= 0.84 ? "high" : suggestion.confidence >= 0.6 ? "medium" : "low";
       const confidenceLabel = suggestion.confidence >= 0.84 ? `高 ${Math.round(suggestion.confidence * 100)}%` : suggestion.confidence >= 0.6 ? `待确认 ${Math.round(suggestion.confidence * 100)}%` : "未识别";
-      const options = [`<option value="">忽略此列</option>`, ...BOMCore.FIELD_DEFS.map((field) => `<option value="${field.key}" ${state.mapping[index] === field.key ? "selected" : ""}>${field.label}</option>`)].join("");
+      const options = [`<option value="">忽略此列</option>`, ...fields.map((field) => `<option value="${field.key}" ${state.mapping[index] === field.key ? "selected" : ""}>${field.label}</option>`)].join("");
       return `<div class="mapping-item ${level}">
         <div class="mapping-source"><strong title="${escapeHtml(header.label)}">${header.column} · ${escapeHtml(header.label)}</strong><span class="confidence">${confidenceLabel}</span></div>
         <select data-column-index="${index}" aria-label="${escapeHtml(header.label)} 对应字段">${options}</select>
@@ -713,7 +714,7 @@
   async function parseDocument(file, encodingPreference) {
     const readResult = await readWorkbookFile(file, encodingPreference || "auto");
     const workbook = readResult.workbook;
-    const analysis = BOMCore.analyzeWorkbook(workbook);
+    const analysis = BOMCore.analyzeWorkbook(workbook, { preferJlc: state.mode === "jlcpcb" });
     const baseSheet = analysis.sheets.find((sheet) => sheet.index === analysis.bestSheetIndex) || analysis.sheets[0];
     const sheet = baseSheet.recognized ? baseSheet : BOMCore.reanalyzeWithHeader(baseSheet, 0, 1);
     const mapping = sheet.suggestions.map((suggestion) => suggestion.field || "");
@@ -769,6 +770,10 @@
       const active = added[added.length - 1];
       if (active.encodingSuspicious) {
         setNotice("warning", `文件已按“${active.encodingLabel}”读取，但内容仍疑似乱码。请在“读取编码”中选择 GBK/GB18030 或其他编码后重读。`);
+      } else if (active.sheet.bomFormat === "jlcpcb") {
+        setNotice("success", `已识别“${active.file.name}”的嘉立创 BOM 表头，共 ${active.rows.length} 行。请核对型号、厂家和数量。`);
+      } else if (state.mode === "jlcpcb" && active.analysis.hasRecognizedSheet) {
+        setNotice("warning", `“${active.file.name}”未找到嘉立创的厂家料号和商城料号表头，已按通用 BOM 匹配，请核对字段。`);
       } else {
         setNotice(active.analysis.hasRecognizedSheet ? "success" : "warning", active.analysis.hasRecognizedSheet
           ? `批量任务已有 ${state.documents.length} 个 BOM；“${active.file.name}”已按 ${active.encodingLabel} 读取。`

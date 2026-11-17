@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="离线智能识别 BOM 表头，校验数据并生成装配清单、领料单、采购清单、明细表和外购件汇总表。">
   <title>智料单 · BOM 工作台</title>
-  <link rel="stylesheet" href="styles.css?v=1.44">
+  <link rel="stylesheet" href="styles.css?v=1.45">
 </head>
 <body>
   <div class="app-shell">
@@ -16,7 +16,7 @@
       </a>
       <div class="topbar-actions">
         <span class="privacy-badge"><span class="status-dot"></span>数据仅在本机处理</span>
-        <button class="version-button" id="openChangelog" type="button">v1.44 网页版 · 更新日志</button>
+        <button class="version-button" id="openChangelog" type="button">v1.45 网页版 · 更新日志</button>
         <button class="ghost-button" id="openHelp" type="button">使用说明</button>
       </div>
     </header>
@@ -38,7 +38,12 @@
       <section class="mode-switch" aria-label="导入类型">
         <button class="mode-card active" data-mode="bom" type="button">
           <span class="mode-icon">B</span>
-          <span><strong>导入 AD / BOM</strong><small>生成装配、领料、采购、明细与外购汇总</small></span>
+          <span><strong>导入 AD BOM</strong><small>沿用原来的 BOM 识别和公司模板</small></span>
+          <span class="check">✓</span>
+        </button>
+        <button class="mode-card" data-mode="jlcpcb" type="button">
+          <span class="mode-icon">嘉</span>
+          <span><strong>导入嘉立创 BOM</strong><small>区分厂家料号和商城编号，生成公司清单</small></span>
           <span class="check">✓</span>
         </button>
         <button class="mode-card" data-mode="assembly" type="button">
@@ -197,7 +202,7 @@
     <div class="dialog-card">
       <div class="dialog-heading"><div><span class="eyebrow">QUICK GUIDE</span><h2>三步完成一份料单</h2></div><button id="closeHelp" type="button" aria-label="关闭">×</button></div>
       <ol class="help-steps">
-        <li><span>1</span><div><strong>直接导入一个或多个原文件</strong><p>可选择「导入 AD / BOM」「导入装配清单」或「导入采购清单」。采购清单模式会自动识别分类行并筛选阻容，用于生成外协阻容备料单。</p></div></li>
+        <li><span>1</span><div><strong>直接导入一个或多个原文件</strong><p>AD 和嘉立创导出的 BOM 分别使用对应入口，均可套用公司模板。也可导入已有装配清单或采购清单生成外协阻容备料单。</p></div></li>
         <li><span>2</span><div><strong>确认板号和字段</strong><p>在每份 BOM 下分别确认 PCB 版号，可修改从文件名识别出的值。出现乱码时可切换读取编码，映射不准确时可用下拉框改正。</p></div></li>
         <li><span>3</span><div><strong>选择批量方式、模板并生成</strong><p>装配、领料、采购、外协阻容四类常用清单默认勾选，并可分别指定模板；其他报表可展开选择。外协阻容从采购清单中的电阻电容导出，并按生产数量计算。</p></div></li>
       </ol>
@@ -209,6 +214,10 @@
     <div class="dialog-card changelog-card">
       <div class="dialog-heading"><div><span class="eyebrow">RELEASE NOTES</span><h2>更新日志</h2></div><button id="closeChangelog" type="button" aria-label="关闭">×</button></div>
       <section class="release latest-release">
+        <div class="release-heading"><strong>v1.45 网页版</strong><time>2026-11-17</time></div>
+        <ul><li>新增嘉立创 BOM 导入入口，可生成现有公司模板。</li><li>采购与外协阻容的装机总数、采购总数改用公式联动。</li></ul>
+      </section>
+      <section class="release">
         <div class="release-heading"><strong>v1.44 网页版</strong><time>2026-11-12</time></div>
         <ul><li>每份 BOM 单独填写 PCB 版号，支持修改文件名识别的值；合并时按实际填写的版号去重。</li></ul>
       </section>
@@ -491,14 +500,14 @@
   </dialog>
 
   <div class="toast" id="toast" role="status"></div>
-  <script src="vendor/cpexcel.full.js?v=1.44"></script>
-  <script src="vendor/xlsx.bundle.js?v=1.44"></script>
-  <script src="vendor/jszip.min.js?v=1.44"></script>
-  <script src="zip-utils.js?v=1.44"></script>
-  <script src="bom-core.js?v=1.44"></script>
-  <script src="excel-reader.js?v=1.44"></script>
-  <script src="default-templates.js?v=1.44"></script>
-  <script src="template-exporter.js?v=1.44"></script>
-  <script src="app.js?v=1.44"></script>
+  <script src="vendor/cpexcel.full.js?v=1.45"></script>
+  <script src="vendor/xlsx.bundle.js?v=1.45"></script>
+  <script src="vendor/jszip.min.js?v=1.45"></script>
+  <script src="zip-utils.js?v=1.45"></script>
+  <script src="bom-core.js?v=1.45"></script>
+  <script src="excel-reader.js?v=1.45"></script>
+  <script src="default-templates.js?v=1.45"></script>
+  <script src="template-exporter.js?v=1.45"></script>
+  <script src="app.js?v=1.45"></script>
 </body>
 </html>

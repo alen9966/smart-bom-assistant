@@ -36,6 +36,10 @@ function styleAlignment(stylesXml, id) {
 
 async function run() {
   const templates = Object.fromEntries(Object.entries(Definitions).map(([key, definition]) => [key, { exactDefinition: definition }]));
+  const ambiguous = { ...rows[0], model: "RS-03K510JT, RS-03000JT", sourceRow: 20 };
+  await assert.rejects(Exporter.buildFiles([ambiguous], metadata,
+    { selectedOutputs: ["subcontract"], templates }, Core, XLSX), /第 20 行/,
+    "默认模板也不得生成数量尚未拆分的外协单");
   const result = await Exporter.buildFiles(rows, metadata, { selectedOutputs: ["assembly", "picking", "procurement", "subcontract"], skipInvalid: true, purchaseMode: "auto", templates }, Core, XLSX);
   assert.equal(result.files.length, 4, "四个常用公司模板应分别生成四个文件");
 
@@ -80,6 +84,15 @@ async function run() {
     const workbook = XLSX.readFile(outputPath, { cellStyles: true });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const outputXml = await zipText(file.bytes, definition.inspection.sheetPath);
+    if (["procurement", "subcontract"].includes(file.key)) {
+      assert.equal(sheet.I4.v, "套数");
+      assert.equal(sheet.J4.t, "n", "投产套数必须为可编辑数值");
+      assert.equal(sheet.J4.v, metadata.multiplier);
+      assert.equal(sheet.I5.v, 0, "备份数量保留为可编辑输入");
+      assert.equal(sheet.J5.f, "F5*$J$4", "装机总数应联动单机数量及投产套数");
+      assert.equal(sheet.K5.f, "J5+I5", "采购总数应联动装机总数及备份数量");
+      assert.match(await zipText(file.bytes, "xl/workbook.xml"), /calcMode="auto"/);
+    }
     if (file.key === "assembly") {
       assert.equal(sheet.A1.v, "板号", "装配清单表头标签应为板号");
       assert.equal(String(sheet.C1.v), "ZC7.820.0155-V3", "装配清单表头应只显示板号");
@@ -188,6 +201,9 @@ async function run() {
     assert.equal(duplicateSheet.F5.v, 57, `${file.key} 合并相同物料后单机数量应为 56+1`);
     assert.equal(duplicateSheet.J5.v, 342, `${file.key} 合并相同物料后装机总数应为 57×6`);
     assert.equal(duplicateSheet.K5.v, 342, `${file.key} 合并相同物料后采购总数应为 57×6`);
+    assert.equal(duplicateSheet.J4.v, 6);
+    assert.equal(duplicateSheet.J5.f, "F5*$J$4");
+    assert.equal(duplicateSheet.K5.f, "J5+I5");
   }
   // Cover the partially styled tail of the template and rows beyond its capacity.
   const longRows = Array.from({ length: 160 }, (_, index) => ({

@@ -7,6 +7,26 @@ const Codepage = require("codepage");
 const ExcelReader = require("../excel-reader.js");
 const DefaultTemplates = require("../default-templates.js");
 
+// A chip suffix must not be interpreted as a capacitance unit.
+assert.equal(Core.resistorCapacitorType({ category: "集成电路", model: "LMH6702MF" }), "");
+assert.equal(Core.resistorCapacitorType({ model: "LMH6702MF" }), "");
+assert.equal(Core.resistorCapacitorType({ category: "电感", model: "0603X", designator: "L1" }), "");
+assert.equal(Core.resistorCapacitorType({ model: "0.1μF/50V" }), "电容");
+assert.equal(Core.resistorCapacitorType({ category: "电阻", model: "TEST 2nF" }), "电阻");
+const passiveFixture = { category: "电阻", sourceRow: 20, designator: "R1, R2", quantityRaw: "2",
+  model: "RS-03K510JT或RC0603JR-07 51RL, RS-03000JT或RC0603JR-07 0RL", errors: [], warnings: [] };
+const mixedFixture = Core.revalidateRow(passiveFixture, 3);
+assert.ok(mixedFixture.warnings.some(issue => issue.field === "model"));
+const mixedOutputs = Core.buildOutputs([mixedFixture], { multiplier: 3, skipInvalid: false });
+assert.equal(mixedOutputs.subcontract.length, 0);
+assert.equal(mixedOutputs.subcontractPending.length, 1);
+assert.throws(() => Core.assertSubcontractReady(mixedOutputs), /第 20 行/);
+const ordinaryAlternatives = Core.revalidateRow({ ...passiveFixture, model: "RS-03K510JT或RC0603JR-07 51RL" }, 3);
+const ordinarySpec = Core.revalidateRow({ ...passiveFixture, model: "10kΩ, 1%, 0603" }, 3);
+const cleanPassives = Core.buildOutputs([ordinaryAlternatives, ordinarySpec], { multiplier: 3 });
+assert.equal(cleanPassives.subcontractPending.length, 0);
+assert.deepEqual(cleanPassives.subcontract.map(row => [row.baseQuantity, row.quantity]), [[2, 6], [2, 6]]);
+
 const workbook = XLSX.utils.book_new();
 const source = [
   ["项目：智能识别测试"],
@@ -192,7 +212,10 @@ assert.ok(fromProcurement.subcontract.length >= 80, "导入采购清单后应导
 assert.ok(fromProcurement.subcontract.every((row) => row.componentType === "电阻" || row.componentType === "电容"), "外协表应仅含电阻电容");
 assert.equal(fromProcurement.subcontract[0].baseQuantity, 1, "外协单机数量应取采购清单单机数量");
 assert.equal(fromProcurement.subcontract[0].quantity, 4, "外协备料数量应为单机数量×生产数量");
-const procurementOnlyBook = Core.buildWorkbook(procurementExtracted.rows, {
+assert.ok(fromProcurement.subcontractPending.length > 0, "旧模板样例中混写不同型号的行必须标记待确认");
+const reviewedProcurementRows = procurementExtracted.rows.filter(row =>
+  !fromProcurement.subcontractPending.some(pending => pending.sourceRow === row.sourceRow));
+const procurementOnlyBook = Core.buildWorkbook(reviewedProcurementRows, {
   projectCode: "TEST-PROC",
   projectName: "采购转外协",
   multiplier: 4,

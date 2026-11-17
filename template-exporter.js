@@ -740,6 +740,22 @@
       });
     }
     xml = removeWorksheetFormulas(xml);
+    if (inspection.orderQuantityFormula && rowsForTemplate[0]?.__category) {
+      const { baseCol, backupCol, installedCol, orderCol } = inspection.orderQuantityFormula;
+      const multiplier = Number(metadata.multiplier || 1);
+      // The first category row has no part quantities. Keep the editable lot
+      // size there without shifting the template's material or signature rows.
+      xml = setCell(xml, `${backupCol}${dataStartRow}`, "套数");
+      xml = setCell(xml, `${installedCol}${dataStartRow}`, multiplier);
+      const batchRef = `$${installedCol}$${dataStartRow}`;
+      rowsForTemplate.forEach((data, index) => {
+        if (data.__category) return;
+        const row = dataStartRow + index;
+        const installed = baseQuantity(data) * multiplier;
+        xml = setCell(xml, `${installedCol}${row}`, { formula: `${baseCol}${row}*${batchRef}`, value: installed });
+        xml = setCell(xml, `${orderCol}${row}`, { formula: `${installedCol}${row}+${backupCol}${row}`, value: installed });
+      });
+    }
     if (inspection.quantityFormula) {
       const quantityMatch = inspection.matches.find((match) => match.key === "quantity");
       if (quantityMatch) {
@@ -812,6 +828,7 @@
     });
     const selected = (options.selectedOutputs || []).filter((key) => core.OUTPUT_DEFS[key]);
     if (!selected.length) throw new Error("请至少选择一种需要生成的清单");
+    if (selected.includes("subcontract")) core.assertSubcontractReady(outputs);
     const files = [];
     const generatedAt = new Date().toLocaleString("zh-CN", { hour12: false });
     const fullMetadata = { ...metadata, generatedAt };
