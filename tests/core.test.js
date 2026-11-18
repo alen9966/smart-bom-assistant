@@ -28,6 +28,30 @@ assert.equal(cleanPassives.subcontractPending.length, 0);
 assert.deepEqual(cleanPassives.subcontract.map(row => [row.baseQuantity, row.quantity]), [[2, 6], [2, 6]]);
 
 const workbook = XLSX.utils.book_new();
+{
+  const sheet = Core.analyzeSheet(XLSX.utils.aoa_to_sheet([
+    ["Comment","Designator","Footprint","LibRef","Quantity","Value"],
+    ["","J1","TEST","Socket",1,""],
+    ["NC","C1","0402C","cap",1,"0402CG0R5C500NT"],
+    ["4.7K_NC","R2","0402R","res",2,"RC-02W472JT"],
+    ["0Ω-NP","R3","0603R","res",1,"RS-03000JT"],
+    ["100uF","C2","1210C","old ref",1,"1206X107M6R3NT"],
+    ["NC","SW1","SW","switch",1,"SW-NC"],
+    ["","J2","TEST","",1,""],
+  ]),"BOM",0);
+  const extracted = Core.extractRows(sheet,sheet.suggestions.map(h=>h.field),1).rows;
+  assert.equal(extracted[0].description,"Socket");
+  assert.equal(extracted[0].errors.length,0);
+  assert.ok(extracted[6].errors.length);
+  assert.equal(extracted[4].model,"1206X107M6R3NT");
+  assert.ok(Core.revalidateRow(extracted[4],1).warnings.some(w=>w.message.includes("1210C")));
+  for (const mode of ["bom","procurement"]) {
+    const o=Core.buildOutputs(extracted,{mode,purchaseMode:"all"});
+    assert.equal(o.detail.length,6);
+    assert.deepEqual(o.procurement.map(r=>r.designator).sort(),["C2","J1","SW1"]);
+    assert.deepEqual(o.subcontract.map(r=>r.designator),["C2"]);
+  }
+}
 const source = [
   ["项目：智能识别测试"],
   ["制表日期", "2026-08-10"],

@@ -12,6 +12,7 @@
   const MAX_SCAN_COLS = 80;
 
   const FIELD_DEFS = [
+    { key: "libraryRef", label: "库引用（缺标识时补用）", aliases: [] },
     { key: "category", label: "类别", aliases: ["类别", "分类", "物料类别", "物料分类", "class", "category", "part type", "type"] },
     { key: "designator", label: "位号", aliases: ["位号", "元件位号", "参考位号", "器件位号", "reference", "designator", "refdes", "ref des", "location"] },
     { key: "partNumber", label: "物料编码", aliases: ["物料编码", "物料编号", "物料号", "物资编码", "物资编号", "编码", "存货编码", "零件编号", "part number", "part no", "partnumber", "pn", "item code", "material code", "sku"] },
@@ -205,6 +206,7 @@
   }
 
   function rankHeader(header) {
+    if (normalizeText(header) === "libref") return [{ field: "libraryRef", label: FIELD_MAP.libraryRef.label, confidence: 1 }];
     const ranked = FIELD_DEFS.filter((field) => field.aliases.length).map((field) => {
       const confidence = Math.max(...field.aliases.map((alias) => aliasScore(header, alias)));
       return { field: field.key, label: field.label, confidence };
@@ -469,7 +471,7 @@
     if (duplicates.length) issues.push({ level: "error", message: `字段重复对应：${[...new Set(duplicates)].map((key) => FIELD_MAP[key].label).join("、")}` });
     if (!fields.has("quantity")) issues.push({ level: "error", message: "尚未指定“数量”列" });
     if (!fields.has("variant")) issues.push({ level: "warning", message: "原始 BOM 未包含“装配变量（Variant）”列，可在页面“项目信息”的“装配变量”框中手动填写；未填写时按“整机采购”处理" });
-    const identifiers = ["partNumber", "model", "description", "drawingNo", "assemblyName"];
+    const identifiers = ["partNumber", "model", "description", "drawingNo", "assemblyName", "libraryRef"];
     if (bomFormat === "jlcpcb") identifiers.push("manufacturerPartNumber", "componentValue", "supplierPartNumber");
     if (!identifiers.some((field) => fields.has(field))) {
       issues.push({ level: "error", message: "至少指定物料编码、型号/规格、物料名称、图号或装配项目中的一项" });
@@ -577,6 +579,10 @@
           ? `商城：${[row.supplierName, row.supplierPartNumber].filter(Boolean).join(" ")}` : ""
       ].filter(Boolean).join("；");
     }
+    if (!hasIdentity(row) && row.libraryRef) {
+      row.description = row.libraryRef;
+      row.usedLibraryRef = true;
+    }
     const inferred = inferPassiveFields(row);
     if (!row.description) row.description = inferred.description;
     if (!row.footprint) row.footprint = inferred.footprint;
@@ -606,6 +612,7 @@
     }
     if (!row.partNumber && row.model) row.warnings.push({ field: "partNumber", message: "没有物料编码，汇总时将使用型号/名称作为识别依据" });
     addJlcWarning(row);
+    addMaterialWarnings(row);
     addSubcontractModelWarning(row);
     row.status = row.errors.length ? "error" : row.warnings.length ? "warning" : "ok";
     return row;
@@ -688,12 +695,39 @@
     }
     if (!clean.partNumber && clean.model) clean.warnings.push({ field: "partNumber", message: "没有物料编码，汇总时将使用型号/名称作为识别依据" });
     addJlcWarning(clean);
+    addMaterialWarnings(clean);
     addSubcontractModelWarning(clean);
     clean.status = clean.errors.length ? "error" : clean.warnings.length ? "warning" : "ok";
     return clean;
   }
 
+  function isNotFitted(row) {
+    // NC/NP can also describe switch contacts or form part of a real MPN.
+    // Treat the shorthand as a fitting flag only on passive values, never by substring.
+    return [row.description, row.model].some(value => {
+      const v = text(value);
+      if (/^(?:DNP|DNI|不装|不贴|不装配|不贴装)$/i.test(v)) return true;
+      if (!resistorCapacitorType(row)) return false;
+      return /^(?:NC|NP)$/i.test(v) ||
+        /^\d*\.?\d+\s*(?:[kKmM]?Ω?|[pnumµμ]F)(?:\s*\/\s*\d+(?:\.\d+)?V)?[\s_-]+(?:NC|NP|DNP|DNI)$/i.test(v);
+    });
+  }
+
+  function addMaterialWarnings(row) {
+    if (row.usedLibraryRef && row.description === row.libraryRef)
+      row.warnings.push({ field: "description", message: "原物料标识为空，已用 LibRef 补回；库引用不等于已核实的厂家料号" });
+    if (isNotFitted(row))
+      row.warnings.push({ field: "description", message: "标记为不装：保留原始明细，不计入采购和外协阻容备料" });
+    const size = text(row.footprint).match(/^(0201|0402|0603|0805|1206|1210|1812)C?$/i);
+    if (size && resistorCapacitorType(row) === "电容") {
+      const inferred = inferPassiveFields({ ...row, footprint: "" }).footprint;
+      if (/^\d{4}C$/.test(inferred) && !inferred.startsWith(size[1]))
+        row.warnings.push({ field: "model", message: `型号对应封装 ${inferred}，与 PCB 封装 ${row.footprint} 不一致；采购前核对，未自动替换型号` });
+    }
+  }
+
   function purchaseDecision(row, mode) {
+    if (isNotFitted(row)) return { purchased: false, basis: "不装，不计入采购或外协备料" };
     if (mode === "all") return { purchased: true, basis: "设置为全部外购" };
     const combined = normalizeText([row.source, row.category].filter(Boolean).join(" "));
     const vendor = text(row.vendor);
@@ -960,8 +994,7 @@
     const purchasedRows = withPurchase.filter((row) => row.purchased);
     const subcontractMultiplier = Number(options.multiplier || 1);
     // 外协阻容：采购导入模式直接筛阻容；BOM/装配模式从外购物料中筛阻容
-    const subcontractBase = mode === "procurement" ? withPurchase : purchasedRows;
-    const subcontractCandidates = subcontractBase
+    const subcontractCandidates = purchasedRows
       .filter((row) => !isPrintedBoard(row))
       .map((row) => ({ ...row, componentType: resistorCapacitorType(row) }))
       .filter((row) => row.componentType);
